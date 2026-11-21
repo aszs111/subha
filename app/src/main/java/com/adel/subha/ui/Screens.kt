@@ -271,6 +271,7 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onBeads: () -> Unit, onA
             SwitchRow("صوت فرقعة الخرز", null, state.sound, state::changeSound)
             SwitchRow("الاهتزاز مع كل خرزة", "واهتزاز أطول عند إتمام العدد", state.vibrate, state::changeVibrate)
             SwitchRow("إبقاء الشاشة مضاءة", "أثناء التسبيح في الشاشة الرئيسية", state.keepOn, state::changeKeepOn)
+            SwitchRow("تأرجح الخيط مع ميل الجوال", "يتدلى الخيط ويتأرجح كالمسبحة الحقيقية", state.sway, state::changeSway)
 
             Section("الخطة")
             Column(Modifier.padding(horizontal = 20.dp)) {

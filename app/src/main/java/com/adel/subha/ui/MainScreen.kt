@@ -128,6 +128,7 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
                     onTap = onBeads,
                     modifier = Modifier.fillMaxHeight().fillMaxWidth(0.40f),
                     controller = controller,
+                    sway = state.sway,
                 )
                 DhikrPanel(state, d, art.style.accent, onAdhkar, Modifier.weight(1f).fillMaxHeight())
             }

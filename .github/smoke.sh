@@ -19,6 +19,7 @@ adb shell settings put global hide_error_dialogs 1
 adb install -r app.apk
 adb shell am start -n $PKG/.MainActivity; sleep 8
 shot 01_main
+adb shell input swipe 864 500 864 2000 600; sleep 1.5; shot 01b_one_long_swipe
 for i in 1 2 3 4 5 6; do adb shell input swipe 864 600 864 1500 500; sleep 0.3; done
 sleep 1; shot 02_after_swipes
 for i in 1 2 3; do tap_text "تسبيحة" || adb shell input tap 160 2050; sleep 0.5; done

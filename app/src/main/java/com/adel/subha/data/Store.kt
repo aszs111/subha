@@ -49,6 +49,7 @@ class AppState(context: Context) {
     var vibrate by mutableStateOf(prefs.getBoolean("vibrate", true)); private set
     var keepOn by mutableStateOf(prefs.getBoolean("keepOn", true)); private set
     var autoNext by mutableStateOf(prefs.getBoolean("autoNext", true)); private set
+    var sway by mutableStateOf(prefs.getBoolean("sway", true)); private set
     var volume by mutableStateOf(prefs.getFloat("volume", 0.8f)); private set
     var background by mutableStateOf(prefs.getString("bg", "black") ?: "black"); private set
 
@@ -176,6 +177,7 @@ class AppState(context: Context) {
             saveList()
         } else replace(current.copy(bead = style))
     }
+    fun changeSway(v: Boolean) { sway = v; prefs.edit().putBoolean("sway", v).apply() }
     fun changeVolume(v: Float) { volume = v; prefs.edit().putFloat("volume", v).apply() }
     fun changeBackground(v: String) { background = v; prefs.edit().putString("bg", v).apply() }
 }
