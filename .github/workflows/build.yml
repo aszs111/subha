@@ -1,0 +1,53 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk "out/Subha-1.0.${GITHUB_RUN_NUMBER}.apk"
+          # mapping file: needed to read crash/ANR reports from the obfuscated release
+          cp app/build/outputs/mapping/release/mapping.txt "out/mapping-1.0.${GITHUB_RUN_NUMBER}.txt" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Subha-mapping
+          path: out/mapping-*.txt
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Subha-apk
+          path: out/*.apk
+
+      - name: Publish release (download link for the phone)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: سُبحة 1.0.${{ github.run_number }}
+          files: |
+            out/*.apk
+            out/mapping-*.txt
+          make_latest: true
