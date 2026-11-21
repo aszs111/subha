@@ -28,8 +28,8 @@ sleep 0.45; shot 03_mid_drop; wait; sleep 1
 tap_text "الأذكار ‹" || adb shell input tap 330 800; sleep 2; shot 04_adhkar
 adb shell input keyevent 4; sleep 1
 # الضغط على الخرز → شكل الخرزات
-adb shell input tap 940 1200; sleep 2; shot 05_beads
-adb shell input keyevent 4; sleep 1
+tap_text "الخرزات" || adb shell input tap 940 1200; sleep 2; shot 05_beads
+tap_text "كهرمان" && sleep 1 && adb shell input keyevent 4 && sleep 1 && shot 05b_amber
 tap_text "الإعدادات" || adb shell input tap 80 170; sleep 2; shot 06_settings
 adb shell input keyevent 4; sleep 1
 adb shell pidof $PKG || echo "APP DIED"

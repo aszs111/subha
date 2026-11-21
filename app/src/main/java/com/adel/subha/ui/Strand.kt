@@ -6,8 +6,8 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -92,26 +92,43 @@ fun BeadStrand(
             Modifier
                 .fillMaxSize()
                 .pointerInput(style, fall, threshold) {
-                    detectVerticalDragGestures(
-                        onDragEnd = {
+                    // إيماءة واحدة: لمسة بلا حركة = ضغط، وحركة تتجاوز حدّ اللمس = سحب يُسقط الخرز
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var dragging = false
+                        var lastY = down.position.y
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!ch.pressed) {
+                                if (!dragging) tapCb()
+                                break
+                            }
+                            if (!dragging && (ch.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+                                dragging = true
+                                lastY = ch.position.y
+                            }
+                            if (dragging) {
+                                ch.consume()
+                                val dy = ch.position.y - lastY
+                                lastY = ch.position.y
+                                var acc = (pull + dy).coerceAtLeast(0f)
+                                var n = 0
+                                while (acc >= threshold && n < 3) {
+                                    pull = 0f
+                                    startDrop()
+                                    acc -= threshold
+                                    n++
+                                }
+                                pull = acc.coerceAtMost(threshold * 0.95f)
+                            }
+                        }
+                        if (pull > 0f) {
                             val p0 = pull
                             scope.launch { animate(p0, 0f, animationSpec = tween(160)) { v, _ -> pull = v } }
-                        },
-                        onDragCancel = { pull = 0f },
-                    ) { change, dy ->
-                        change.consume()
-                        var acc = (pull + dy).coerceAtLeast(0f)
-                        var n = 0
-                        while (acc >= threshold && n < 3) {
-                            pull = 0f
-                            startDrop()
-                            acc -= threshold
-                            n++
                         }
-                        pull = acc.coerceAtMost(threshold * 0.95f)
                     }
                 }
-                .pointerInput(Unit) { detectTapGestures(onTap = { tapCb() }) }
         ) {
             // الخيط
             drawLine(
