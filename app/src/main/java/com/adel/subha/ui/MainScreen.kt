@@ -9,6 +9,19 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -77,6 +90,8 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
         ) { id ->
             val d = state.adhkar.firstOrNull { it.id == id } ?: return@AnimatedContent
             val art = rememberBeadArt(beadStyle(d.bead))
+            val controller = remember { StrandController() }
+            Box(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxSize()) {
                 // الخرز على اليمين (أول عنصر في الاتجاه من اليمين لليسار)
                 BeadStrand(
@@ -108,8 +123,16 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
                     },
                     onTap = onBeads,
                     modifier = Modifier.fillMaxHeight().fillMaxWidth(0.40f),
+                    controller = controller,
                 )
                 DhikrPanel(state, d, art.style.accent, onAdhkar, Modifier.weight(1f).fillMaxHeight())
+            }
+            // زر النقر الكبير بلون الخرز في الزاوية اليسرى السفلى
+            TapButton(
+                art.style.accent,
+                onTap = { controller.tap() },
+                modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 0.dp, end = 26.dp, bottom = 30.dp),
+            )
             }
         }
 
@@ -161,10 +184,10 @@ private fun DhikrPanel(state: AppState, d: Dhikr, accent: Color, onAdhkar: () ->
     ) {
         Spacer(Modifier.weight(0.7f))
         val fs = when {
-            d.text.length <= 16 -> 36.sp
-            d.text.length <= 30 -> 30.sp
-            d.text.length <= 70 -> 24.sp
-            else -> 20.sp
+            d.text.length <= 16 -> 42.sp
+            d.text.length <= 30 -> 35.sp
+            d.text.length <= 70 -> 28.sp
+            else -> 23.sp
         }
         Column(
             Modifier.clickable(remember { MutableInteractionSource() }, indication = null, onClick = onAdhkar),
@@ -172,7 +195,7 @@ private fun DhikrPanel(state: AppState, d: Dhikr, accent: Color, onAdhkar: () ->
         ) {
             Text(d.text, color = Cream, fontSize = fs, lineHeight = fs * 1.5f, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                Text("الأذكار", color = Cream.copy(alpha = 0.45f), style = MaterialTheme.typography.labelLarge, letterSpacing = 1.sp)
+                Text("الأذكار", color = Cream.copy(alpha = 0.45f), style = MaterialTheme.typography.titleMedium, letterSpacing = 1.sp)
                 Icon(Icons.Default.KeyboardArrowDown, null, tint = Cream.copy(alpha = 0.45f), modifier = Modifier.size(16.dp))
             }
         }
@@ -180,13 +203,13 @@ private fun DhikrPanel(state: AppState, d: Dhikr, accent: Color, onAdhkar: () ->
         Text(
             d.count.ar(),
             color = if (done) accent else Cream,
-            fontSize = if (d.count < 1000) 96.sp else 70.sp,
-            lineHeight = 100.sp,
+            fontSize = if (d.count < 1000) 112.sp else 82.sp,
+            lineHeight = 116.sp,
             modifier = Modifier.scale(pop.value),
         )
         Text(
             if (d.target > 0) "من ${d.target.ar()}" else "بلا حد",
-            color = Cream.copy(alpha = 0.5f), style = MaterialTheme.typography.labelLarge, letterSpacing = 2.sp,
+            color = Cream.copy(alpha = 0.5f), style = MaterialTheme.typography.titleMedium, letterSpacing = 2.sp,
         )
         Spacer(Modifier.height(12.dp))
         Diamonds(
@@ -202,15 +225,16 @@ private fun DhikrPanel(state: AppState, d: Dhikr, accent: Color, onAdhkar: () ->
                 else -> "اليوم: ${today.ar()}"
             },
             color = if (done) accent else Cream.copy(alpha = 0.4f),
-            style = MaterialTheme.typography.labelLarge, letterSpacing = 1.sp,
+            style = MaterialTheme.typography.titleMedium, letterSpacing = 1.sp,
         )
         Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(130.dp)) // مكان زر النقر
     }
 }
 
 @Composable
 private fun Diamonds(filled: Int, color: Color) {
-    Canvas(Modifier.size(width = 56.dp, height = 12.dp)) {
+    Canvas(Modifier.size(width = 66.dp, height = 14.dp)) {
         val r = size.height / 2.2f
         for (k in 0 until 3) {
             // من اليمين إلى اليسار
@@ -220,6 +244,48 @@ private fun Diamonds(filled: Int, color: Color) {
                 moveTo(c.x, c.y - r); lineTo(c.x + r * 0.8f, c.y); lineTo(c.x, c.y + r); lineTo(c.x - r * 0.8f, c.y); close()
             }
             if (k < filled) drawPath(p, color) else drawPath(p, color.copy(alpha = 0.6f), style = Stroke(1.dp.toPx()))
+        }
+    }
+}
+
+@Composable
+private fun TapButton(color: Color, onTap: () -> Unit, modifier: Modifier = Modifier) {
+    val press = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
+    val tapCb by rememberUpdatedState(onTap)
+    Box(
+        modifier
+            .size(112.dp)
+            .scale(press.value)
+            .shadow(14.dp, CircleShape, ambientColor = color, spotColor = color)
+            .clip(CircleShape)
+            .background(
+                Brush.radialGradient(
+                    0f to lerp(color, Color.White, 0.45f),
+                    0.45f to color,
+                    1f to lerp(color, Color.Black, 0.55f),
+                    center = Offset(110f, 90f), radius = 380f,
+                )
+            )
+            .border(1.5.dp, lerp(color, Color.White, 0.5f).copy(alpha = 0.6f), CircleShape)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        scope.launch { press.animateTo(0.9f, tween(70)) }
+                        tryAwaitRelease()
+                        scope.launch { press.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy)) }
+                    },
+                    onTap = { tapCb() },
+                )
+            }
+            .semantics { contentDescription = "تسبيحة" },
+    ) {
+        // لمعة
+        Canvas(Modifier.fillMaxSize()) {
+            drawOval(
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.55f), Color.Transparent), center = Offset(size.width * 0.34f, size.height * 0.26f), radius = size.width * 0.28f),
+                topLeft = Offset(size.width * 0.12f, size.height * 0.10f), size = Size(size.width * 0.44f, size.height * 0.30f),
+            )
         }
     }
 }

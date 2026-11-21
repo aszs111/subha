@@ -21,6 +21,8 @@ adb shell am start -n $PKG/.MainActivity; sleep 8
 shot 01_main
 for i in 1 2 3 4 5 6; do adb shell input swipe 864 600 864 1500 500; sleep 0.3; done
 sleep 1; shot 02_after_swipes
+for i in 1 2 3; do tap_text "تسبيحة" || adb shell input tap 160 2050; sleep 0.5; done
+adb shell input tap 160 2050; sleep 0.15; shot 02b_tap_mid; sleep 1; shot 02c_after_taps
 adb shell input swipe 864 700 864 820 2500 &
 sleep 1.6; shot 03_mid_drag; wait; sleep 1
 for i in $(seq 1 14); do adb shell input swipe 864 600 864 1500 400; done

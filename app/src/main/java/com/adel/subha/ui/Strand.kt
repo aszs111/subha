@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -131,6 +132,12 @@ fun DrawScope.drawStrand(g: StrandGeom, pos: Int, falling: List<Pair<Int, Float>
     drawRect(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg), startY = size.height - f, endY = size.height), topLeft = Offset(0f, size.height - f))
 }
 
+/** يتيح لزر النقر أن يُسقط خرزة من الخيط. */
+class StrandController {
+    internal val taps = Channel<Unit>(Channel.UNLIMITED)
+    fun tap() { taps.trySend(Unit) }
+}
+
 private class Drop(val index: Int, val y0: Float, val t: Animatable<Float, AnimationVector1D>)
 
 /**
@@ -146,6 +153,7 @@ fun BeadStrand(
     onLand: () -> Unit,
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
+    controller: StrandController? = null,
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
@@ -188,6 +196,12 @@ fun BeadStrand(
                 } finally {
                     drops.remove(d)
                 }
+            }
+        }
+
+        if (controller != null) {
+            LaunchedEffect(g, controller) {
+                for (t in controller.taps) { drag = 0f; release() }
             }
         }
 
