@@ -351,7 +351,7 @@ private fun SwaySensor(enabled: Boolean, swing: Swing) {
             }
             override fun onAccuracyChanged(s: Sensor?, a: Int) {}
         }
-        if (sensor != null) sm.registerListener(l, sensor, SensorManager.SENSOR_DELAY_GAME)
+        if (sensor != null) sm?.registerListener(l, sensor, SensorManager.SENSOR_DELAY_GAME)
         onDispose { sm?.unregisterListener(l) }
     }
 }
