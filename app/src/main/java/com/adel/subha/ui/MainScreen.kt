@@ -84,14 +84,20 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
                     count = d.count,
                     bg = edge,
                     onDrop = {
-                        if (state.tick() == Tick.REACHED) {
+                        val cur = state.current
+                        if (state.autoNext && state.adhkar.size > 1 && cur.target > 0 && cur.count >= cur.target) {
+                            // اكتمل الذكر واستمر المسبِّح: انتقل فورًا واحسبها للذكر التالي
+                            state.goNext()
+                            state.tick()
+                        } else if (state.tick() == Tick.REACHED) {
+                            val reachedId = state.currentId
                             scope.launch {
                                 delay(380)
                                 if (state.vibrate) fb.reached()
                                 if (state.sound) fb.done()
                                 if (state.autoNext && state.adhkar.size > 1) {
-                                    delay(900)
-                                    state.goNext()
+                                    delay(700)
+                                    if (state.currentId == reachedId) state.goNext()
                                 }
                             }
                         }
