@@ -1,5 +1,21 @@
 package com.adel.subha.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicNone
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.adel.subha.audio.VoiceCounter
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -85,6 +101,35 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val edge = edgeColor(state.background)
+    val controllers = remember { mutableMapOf<Long, StrandController>() }
+
+    // ───── العدّ بالصوت ─────
+    var listening by remember { mutableStateOf(false) }
+    var level by remember { mutableFloatStateOf(0f) }
+    val voice = remember {
+        VoiceCounter(onUtterance = { controllers[state.currentId]?.tap() }, onLevel = { level = it })
+    }
+    LaunchedEffect(state.currentId) { voice.expectFor(state.current.text) }
+    LaunchedEffect(state.voiceSensitivity) { voice.sensitivity = state.voiceSensitivity }
+    val context = LocalContext.current
+    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) { voice.start(scope); listening = true }
+        else scope.launch { snackbar.showSnackbar("العدّ بالصوت يحتاج إذن الميكروفون") }
+    }
+    fun toggleVoice() {
+        if (listening) { voice.stop(); listening = false; return }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            voice.start(scope); listening = true
+            scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar("قل الذكر، واسكت لحظة بعد كل مرة") }
+        } else askMic.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    // يتوقف الاستماع إذا خرجتَ من الشاشة أو من التطبيق
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_STOP) { voice.stop(); listening = false } }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs); voice.stop() }
+    }
 
     RoyalBackground(state.background) {
         AnimatedContent(
@@ -94,7 +139,7 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
         ) { id ->
             val d = state.adhkar.firstOrNull { it.id == id } ?: return@AnimatedContent
             val art = rememberBeadArt(beadStyle(d.bead))
-            val controller = remember { StrandController() }
+            val controller = remember(id) { controllers.getOrPut(id) { StrandController() } }
             Box(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxSize()) {
                 // الخرز على اليمين (أول عنصر في الاتجاه من اليمين لليسار)
@@ -137,6 +182,12 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
                 art.style.button,
                 onTap = { controller.tap() },
                 modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 26.dp, bottom = 62.dp),
+            )
+            // زر الميكروفون بجوار زر النقر
+            MicButton(
+                on = listening, level = level, color = art.style.button,
+                onClick = { toggleVoice() },
+                modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 152.dp, bottom = 90.dp),
             )
             }
         }
@@ -311,6 +362,32 @@ private fun TapButton(color: Color, onTap: () -> Unit, modifier: Modifier = Modi
             drawOval(
                 Brush.radialGradient(listOf(Color.White.copy(alpha = 0.55f), Color.Transparent), center = Offset(size.width * 0.34f, size.height * 0.26f), radius = size.width * 0.28f),
                 topLeft = Offset(size.width * 0.12f, size.height * 0.10f), size = Size(size.width * 0.44f, size.height * 0.30f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun MicButton(on: Boolean, level: Float, color: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier.size(56.dp), contentAlignment = Alignment.Center) {
+        if (on) {
+            // حلقة تنبض مع مستوى الصوت
+            Canvas(Modifier.fillMaxSize()) {
+                drawCircle(color.copy(alpha = 0.25f + 0.5f * level), radius = size.minDimension / 2 * (0.78f + 0.22f * level))
+            }
+        }
+        Box(
+            Modifier.size(46.dp).clip(CircleShape)
+                .background(if (on) color else Color.White.copy(alpha = 0.07f))
+                .border(1.dp, color.copy(alpha = if (on) 0.9f else 0.5f), CircleShape)
+                .clickable(onClick = onClick)
+                .semantics { contentDescription = if (on) "إيقاف العدّ بالصوت" else "العدّ بالصوت" },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                if (on) Icons.Default.Mic else Icons.Default.MicNone, contentDescription = null,
+                tint = if (on) lerp(color, Color.Black, 0.65f) else Cream.copy(alpha = 0.7f),
+                modifier = Modifier.size(24.dp),
             )
         }
     }

@@ -44,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -272,6 +273,27 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onBeads: () -> Unit, onA
             SwitchRow("الاهتزاز مع كل خرزة", "واهتزاز أطول عند إتمام العدد", state.vibrate, state::changeVibrate)
             SwitchRow("إبقاء الشاشة مضاءة", "أثناء التسبيح في الشاشة الرئيسية", state.keepOn, state::changeKeepOn)
             SwitchRow("تأرجح الخيط مع ميل الجوال", "يتدلى الخيط ويتأرجح كالمسبحة الحقيقية", state.sway, state::changeSway)
+
+            Section("العدّ بالصوت")
+            Text(
+                "اضغط زر الميكروفون في الشاشة الرئيسية، ثم قل الذكر واسكت لحظة بعد كل مرة، فتسقط خرزة مع كل تكرار. " +
+                    "يعمل على الجهاز دون إنترنت ولا يحفظ الصوت. وهو يعدّ النطق لا الكلمات، فأي كلام آخر قد يُحسب.",
+                Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.bodyMedium, color = GoldPale.copy(alpha = 0.75f),
+            )
+            Text("الحساسية", Modifier.padding(start = 20.dp, top = 4.dp), style = MaterialTheme.typography.titleSmall, color = Cream)
+            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("منخفضة", style = MaterialTheme.typography.bodySmall, color = Cream.copy(alpha = 0.6f))
+                Slider(
+                    value = state.voiceSensitivity, onValueChange = { state.changeVoiceSensitivity(it) },
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                )
+                Text("عالية", style = MaterialTheme.typography.bodySmall, color = Cream.copy(alpha = 0.6f))
+            }
+            Text(
+                "ارفعها إن كان صوتك خافتًا، واخفضها في المكان المزعج.",
+                Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall, color = Cream.copy(alpha = 0.5f),
+            )
 
             Section("الخطة")
             Column(Modifier.padding(horizontal = 20.dp)) {
