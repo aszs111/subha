@@ -4,38 +4,61 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Handler
+import android.os.Looper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
- * يعدّ التكرارات المنطوقة: كل نطقٍ للذكر يليه سكوت قصير = خرزة واحدة.
- * يعمل على الجهاز بلا إنترنت، ولا يحفظ الصوت ولا يرسله. لا يتعرّف على الكلمات،
- * بل على «دفعات الكلام» وطولها المتوقع.
+ * يعدّ تكرارات الذكر المنطوقة: كل تكرار = خرزة.
+ *
+ * يقطّع الكلام عند «الانخفاضات» في شدة الصوت بين التكرارات (ولو كانت قصيرة كما في
+ * الترديد المتصل)، ولا يقبل الحدّ إلا إذا بلغ الكلام قبله قرابة طول الذكر المتوقع،
+ * فلا تُحسب الوقفات داخل الذكر الطويل. يتعلّم سرعة نطقك من التكرارات السابقة.
+ * يعمل على الجهاز بلا إنترنت، ولا يحفظ الصوت ولا يرسله.
  */
 class VoiceCounter(
     private val onUtterance: () -> Unit,
     private val onLevel: (Float) -> Unit,
 ) {
     private var job: Job? = null
+    private val main = Handler(Looper.getMainLooper())
 
-    /** الطول المتوقع للذكر الواحد (مللي ثانية)؛ يتعلّم من نطقك. */
-    @Volatile var expectedMs = 900f
+    /** الطول المتوقع المبدئي للذكر (من عدد حروفه). */
+    @Volatile private var baseMs = 900f
+    @Volatile private var expectedMs = 900f
+    private val recent = ArrayDeque<Float>()
+
     /** ٠..١: كلما زادت التقط صوتًا أخفض. */
     @Volatile var sensitivity = 0.5f
 
     val running get() = job?.isActive == true
 
-    /** تقدير مبدئي من طول النص: نحو ٦٥ مللي ثانية للحرف. */
+    /** نحو ٧٠ مللي ثانية للحرف في الترديد المعتاد. */
     fun expectFor(text: String) {
         val letters = text.count { it.isLetter() && it !in 'ً'..'ْ' && it != 'ٰ' }
-        expectedMs = (letters * 65f).coerceIn(350f, 6000f)
+        baseMs = (letters * 70f).coerceIn(380f, 6000f)
+        expectedMs = baseMs
+        synchronized(recent) { recent.clear() }
     }
+
+    private fun learn(ms: Float) {
+        synchronized(recent) {
+            recent.addLast(ms)
+            while (recent.size > 6) recent.removeFirst()
+            val sorted = recent.sorted()
+            val median = sorted[sorted.size / 2]
+            expectedMs = median.coerceIn(baseMs * 0.45f, baseMs * 2f)
+        }
+    }
+
+    private fun emit() { main.post { onUtterance() } }
 
     @SuppressLint("MissingPermission")
     fun start(scope: CoroutineScope) {
@@ -45,59 +68,75 @@ class VoiceCounter(
             val frame = rate / 50 // ٢٠ مللي ثانية
             val minBuf = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
             val rec = try {
-                AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, max(minBuf, frame * 8))
+                AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, max(minBuf, frame * 10))
             } catch (e: Exception) { return@launch }
             if (rec.state != AudioRecord.STATE_INITIALIZED) { rec.release(); return@launch }
+
             val buf = ShortArray(frame)
-            var floor = 0f
-            var frames = 0
+            var floor = -1f
+            var n = 0
             var speaking = false
             var above = 0
-            var silentMs = 0
-            var speechMs = 0
-            var acc = 0f          // كلام متراكم لم يبلغ طول ذكر كامل بعد (ذكر طويل فيه وقفات)
-            var sinceSpeech = 0
+            var speechMs = 0f      // زمن الكلام في التكرار الحالي (بما فيه الوقفات القصيرة داخله)
+            var quietMs = 0f       // زمن الانخفاض الحالي
+            var peak = 0f
             try {
                 rec.startRecording()
                 while (isActive) {
-                    val n = rec.read(buf, 0, frame)
-                    if (n <= 0) continue
+                    val r = rec.read(buf, 0, frame)
+                    if (r <= 0) continue
                     var sum = 0.0
-                    for (i in 0 until n) { val v = buf[i].toDouble(); sum += v * v }
-                    val rms = sqrt(sum / n).toFloat()
-                    frames++
-                    if (frames <= 15) { floor = if (frames == 1) rms else floor * 0.8f + rms * 0.2f; continue }
+                    for (i in 0 until r) { val v = buf[i].toDouble(); sum += v * v }
+                    val rms = sqrt(sum / r).toFloat()
+                    n++
 
-                    val factor = 4.6f - sensitivity * 2.8f          // ١٫٨ .. ٤٫٦ أضعاف الضجيج
-                    val thr = max(floor * factor, 180f + (1f - sensitivity) * 420f)
-                    val level = (rms / (thr * 2.5f)).coerceIn(0f, 1f)
-                    withContext(Dispatchers.Main) { onLevel(level) }
+                    // ضجيج المكان: ينزل سريعًا ويصعد ببطء شديد، فلا يرتفع الحدّ مع الكلام
+                    if (floor < 0f) floor = rms
+                    else if (rms < floor) floor = floor * 0.85f + rms * 0.15f
+                    else if (!speaking) floor = min(floor * 1.004f + 0.2f, rms)
+                    if (n < 10) continue
+
+                    val factor = 4.2f - sensitivity * 2.6f           // ١٫٦ .. ٤٫٢ أضعاف الضجيج
+                    val thrOn = max(floor * factor, 120f + (1f - sensitivity) * 380f)
+                    if (n % 3 == 0) {
+                        val lv = (rms / (thrOn * 3f)).coerceIn(0f, 1f)
+                        main.post { onLevel(lv) }
+                    }
 
                     if (!speaking) {
-                        floor = floor * 0.97f + rms.coerceAtMost(floor * 3f + 1f) * 0.03f
-                        if (rms > thr) above++ else above = 0
-                        if (above >= 3) { speaking = true; speechMs = 60; silentMs = 0 }
-                        sinceSpeech += 20
-                        if (sinceSpeech > 2500) acc = 0f
-                    } else {
-                        if (rms > thr * 0.6f) { speechMs += 20 + silentMs; silentMs = 0 } else silentMs += 20
-                        if (silentMs >= 420) {
-                            speaking = false; above = 0; sinceSpeech = 0
-                            acc += speechMs
-                            if (acc >= expectedMs * 0.55f) {
-                                // تعلّم الطول الحقيقي تدريجيًا
-                                expectedMs = (expectedMs * 0.8f + acc * 0.2f).coerceIn(300f, 8000f)
-                                acc = 0f
-                                withContext(Dispatchers.Main) { onUtterance() }
-                            }
+                        if (rms > thrOn) above++ else above = 0
+                        if (above >= 2) {
+                            speaking = true; above = 0
+                            speechMs = 40f; quietMs = 0f; peak = rms
                         }
-                        if (speechMs > 12000) { speaking = false; acc = 0f } // كلام طويل متصل: ليس ذكرًا
+                        continue
+                    }
+
+                    peak = max(rms, peak * 0.996f)
+                    val quiet = rms < max(thrOn * 0.6f, peak * 0.2f)
+                    if (quiet) {
+                        quietMs += 20f
+                    } else {
+                        speechMs += 20f + quietMs   // وقفة قصيرة داخل الذكر تُضمّ إليه
+                        quietMs = 0f
+                    }
+
+                    val exp = expectedMs
+                    if (quietMs >= 100f && speechMs >= exp * 0.6f) {
+                        // انخفاض قصير بعد كلام بطول الذكر تقريبًا = نهاية تكرار
+                        learn(speechMs)
+                        emit()
+                        speaking = false; speechMs = 0f; quietMs = 0f
+                    } else if (quietMs >= 1300f) {
+                        // سكوت طويل: احسب ما سبقه إن كان كلامًا لا نقرة عابرة
+                        if (speechMs >= 200f) { learn(speechMs); emit() }
+                        speaking = false; speechMs = 0f; quietMs = 0f
                     }
                 }
             } finally {
                 runCatching { rec.stop() }
                 rec.release()
-                withContext(Dispatchers.Main + kotlinx.coroutines.NonCancellable) { onLevel(0f) }
+                main.post { onLevel(0f) }
             }
         }
     }
