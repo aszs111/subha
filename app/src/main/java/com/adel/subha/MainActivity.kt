@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
         )
         val state = AppState(applicationContext)
         feedback = Feedback(applicationContext)
-        setContent { SubhaTheme { App(state, feedback) } }
+        setContent { SubhaTheme(state.background) { App(state, feedback) } }
     }
 
     override fun onDestroy() {

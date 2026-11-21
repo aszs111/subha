@@ -11,8 +11,10 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -23,26 +25,123 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
-private class Drop(val y0: Float, val t: Animatable<Float, AnimationVector1D>)
-
+private fun mod100(i: Int) = ((i % 100) + 100) % 100
 private fun clamp01(x: Float) = x.coerceIn(0f, 1f)
 private fun easeOut(x: Float) = 1f - (1f - x) * (1f - x) * (1f - x)
 
 /**
- * خيط عمودي عليه ثلاث خرزات في الأعلى وثلاث في الأسفل وبينهما فراغ.
- * السحب إلى الأسفل يُسقط الخرزات واحدة تلو الأخرى، والضغط يفتح شاشة شكل الخرز.
+ * هندسة الخيط: كل «وحدة» خرزةٌ رقمها i، وفوقها فاصلة إن كانت الخرزة ٣٣ أو ٦٦،
+ * والخرزة رقم ١٠٠ هي المئذنة (الشاهد).
+ */
+class StrandGeom(val art: BeadArt, val w: Float, val h: Float, beadW: Float, val topBase: Float, val botTop: Float, val px1: Float) {
+    val s = beadW / art.beads[0].width
+    val cx = w / 2
+    private fun variant(i: Int) = (((i * 7 + i / 3) % 3) + 3) % 3
+    fun item(i: Int): ImageBitmap = if (mod100(i) == 0) art.imam else art.beads[variant(i)]
+    fun hasDisc(i: Int) = mod100(i) == 33 || mod100(i) == 66
+    val discH get() = art.disc.height * s
+    fun unitH(i: Int) = item(i).height * s + (if (hasDisc(i)) discH else 0f) + px1
+}
+
+private fun DrawScope.img(g: StrandGeom, im: ImageBitmap, top: Float) {
+    val w = im.width * g.s
+    val h = im.height * g.s
+    drawImage(
+        im,
+        srcOffset = IntOffset.Zero, srcSize = IntSize(im.width, im.height),
+        dstOffset = IntOffset((g.cx - w / 2).roundToInt(), top.roundToInt()),
+        dstSize = IntSize(w.roundToInt(), h.roundToInt()),
+        filterQuality = FilterQuality.High,
+    )
+}
+
+private fun DrawScope.unit(g: StrandGeom, i: Int, top: Float) {
+    var y = top
+    if (g.hasDisc(i)) { img(g, g.art.disc, y); y += g.discH }
+    img(g, g.item(i), y)
+}
+
+/** خيط مفتول. */
+private fun DrawScope.rope(g: StrandGeom, color: Color) {
+    val tw = 2.6.dp.toPx()
+    drawLine(color.copy(alpha = 0.9f), Offset(g.cx, 0f), Offset(g.cx, size.height), strokeWidth = tw)
+    val step = 4.dp.toPx()
+    var y = 0f
+    val light = Color.White.copy(alpha = 0.35f)
+    val dark = Color.Black.copy(alpha = 0.35f)
+    while (y < size.height) {
+        drawLine(light, Offset(g.cx - tw / 2, y), Offset(g.cx + tw / 2, y + step * 0.6f), strokeWidth = 0.9.dp.toPx())
+        drawLine(dark, Offset(g.cx - tw / 2, y + step * 0.5f), Offset(g.cx + tw / 2, y + step * 1.1f), strokeWidth = 0.7.dp.toPx())
+        y += step
+    }
+}
+
+/**
+ * يرسم الخيط كله: المجموعة العليا (ما لم يُعدّ بعد)، والسفلى (ما عُدّ)، والخرزات الساقطة.
+ * pos: عدد ما مرّ من الخرز (بما فيه الساقط الآن). falling: (رقم الوحدة، أعلاها الآن).
+ */
+fun DrawScope.drawStrand(g: StrandGeom, pos: Int, falling: List<Pair<Int, Float>>, pending: Float, drag: Float, bg: Color) {
+    rope(g, g.art.style.thread)
+
+    // السفلى
+    val base = pos - falling.size
+    var push = 0f
+    falling.forEach { (i, top) -> push += (top + g.unitH(i) - g.botTop).coerceIn(0f, g.unitH(i)) }
+    var y = g.botTop + push
+    var i = base
+    var guard = 0
+    while (y < size.height && guard++ < 60) {
+        unit(g, i, y); y += g.unitH(i); i--
+    }
+    // العليا
+    var bottom = g.topBase - pending
+    i = pos + 1
+    guard = 0
+    while (bottom > 0 && guard++ < 60) {
+        val hh = g.unitH(i)
+        unit(g, i, bottom - hh + if (i == pos + 1) drag else 0f)
+        bottom -= hh; i++
+    }
+    // الساقطة
+    falling.forEach { (k, top) -> unit(g, k, top) }
+
+    // الخيط يُرى عبر الخرز الشفاف
+    if (g.art.style.translucent) {
+        drawLine(g.art.style.thread.copy(alpha = 0.55f), Offset(g.cx, 0f), Offset(g.cx, size.height), strokeWidth = 1.6.dp.toPx())
+    }
+    // تلاشٍ أعلى الشاشة وأسفلها
+    val f = size.height * 0.12f
+    drawRect(Brush.verticalGradient(listOf(bg, bg.copy(alpha = 0f)), startY = 0f, endY = f))
+    drawRect(Brush.verticalGradient(listOf(bg.copy(alpha = 0f), bg), startY = size.height - f, endY = size.height), topLeft = Offset(0f, size.height - f))
+}
+
+private class Drop(val index: Int, val y0: Float, val t: Animatable<Float, AnimationVector1D>)
+
+/**
+ * الخيط التفاعلي: اسحب الخرزة السفلى من المجموعة العليا فتتبع إصبعك ثم تسقط،
+ * ويمسك الإصبع التي بعدها، فتتوالى مع التمرير. اللمسة بلا سحب تفتح شاشة الأشكال.
  */
 @Composable
 fun BeadStrand(
-    style: BeadStyle,
+    art: BeadArt,
+    count: Int,
+    bg: Color,
     onDrop: () -> Unit,
     onLand: () -> Unit,
     onTap: () -> Unit,
@@ -50,37 +149,41 @@ fun BeadStrand(
 ) {
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
-    val drops = remember { mutableStateListOf<Drop>() }   // الخرزات التي في الهواء الآن
-    var pull by remember { mutableFloatStateOf(0f) }       // سحب الخرزة السفلى من المجموعة العليا بالإصبع
+    var pos by remember { mutableIntStateOf(count) }
+    val drops = remember { mutableStateListOf<Drop>() }
+    var drag by remember { mutableFloatStateOf(0f) }
     val dropCb by rememberUpdatedState(onDrop)
     val landCb by rememberUpdatedState(onLand)
     val tapCb by rememberUpdatedState(onTap)
 
+    LaunchedEffect(count) {
+        if (count != pos) { drops.clear(); drag = 0f; pos = count }
+    }
+
     BoxWithConstraints(modifier.clipToBounds().semantics { contentDescription = "الخرزات" }) {
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
-        val margin = with(density) { 22.dp.toPx() }
-        val gapPx = with(density) { 2.dp.toPx() }
-        // حجم الخرزة: يتسع للعرض ويترك فراغًا يعادل ثلاث خرزات تقريبًا
-        val r = min(min(w * 0.30f / style.shape.w, with(density) { 40.dp.toPx() }), (h - 2 * margin) / (9.5f * 2 * style.shape.h))
-        val ry = style.ry(r)
-        val pitch = 2 * ry + gapPx
-        fun topY(i: Float) = margin + ry + i * pitch
-        fun botY(j: Float) = h - margin - ry - (2f - j) * pitch
-        val fall = botY(0f) - topY(2f)
-        val threshold = min(with(density) { 26.dp.toPx() }, fall * 0.3f)
-        val cx = w / 2
+        val beadW = min(w * 0.62f, with(density) { 118.dp.toPx() })
+        val g = remember(art, w, h) {
+            StrandGeom(art, w, h, beadW, topBase = h * 0.36f, botTop = h * 0.64f, px1 = with(density) { 0.5.dp.toPx() })
+        }
+        val releaseT = min(g.unitH(1) * 0.45f, with(density) { 52.dp.toPx() })
+        val flingV = with(density) { 700.dp.toPx() }
 
-        // كم خانة لم تنزلها المجموعة العليا بعد
-        fun pending(): Float = drops.sumOf { (1f - easeOut(clamp01(it.t.value / 0.7f))).toDouble() }.toFloat()
+        fun pending(): Float = drops.sumOf { d -> ((1f - easeOut(clamp01(d.t.value / 0.55f))) * g.unitH(d.index)).toDouble() }.toFloat()
 
-        fun startDrop() {
-            dropCb()
-            val d = Drop(topY(2f - pending()) + pull, Animatable(0f))
+        fun release() {
+            val i = pos + 1
+            val top = g.topBase - pending() - g.unitH(i) + drag
+            val d = Drop(i, top, Animatable(0f))
             drops.add(d)
+            drag = 0f
+            pos = i
+            dropCb()
+            val dur = (sqrt(((g.botTop - top) / h).coerceAtLeast(0.01f)) * 520).toInt().coerceIn(140, 420)
             scope.launch {
                 try {
-                    d.t.animateTo(1f, tween(300, easing = LinearEasing))
+                    d.t.animateTo(1f, tween(dur, easing = LinearEasing))
                     landCb()
                 } finally {
                     drops.remove(d)
@@ -91,17 +194,26 @@ fun BeadStrand(
         Canvas(
             Modifier
                 .fillMaxSize()
-                .pointerInput(style, fall, threshold) {
-                    // إيماءة واحدة: لمسة بلا حركة = ضغط، وحركة تتجاوز حدّ اللمس = سحب يُسقط الخرز
+                .pointerInput(g) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        val vt = VelocityTracker()
+                        vt.addPosition(down.uptimeMillis, down.position)
                         var dragging = false
                         var lastY = down.position.y
                         while (true) {
                             val ev = awaitPointerEvent()
                             val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
+                            vt.addPosition(ch.uptimeMillis, ch.position)
                             if (!ch.pressed) {
                                 if (!dragging) tapCb()
+                                else if (drag > 0f) {
+                                    if (vt.calculateVelocity().y > flingV) release()
+                                    else {
+                                        val p0 = drag
+                                        scope.launch { animate(p0, 0f, animationSpec = tween(180)) { v, _ -> drag = v } }
+                                    }
+                                }
                                 break
                             }
                             if (!dragging && (ch.position - down.position).getDistance() > viewConfiguration.touchSlop) {
@@ -112,56 +224,34 @@ fun BeadStrand(
                                 ch.consume()
                                 val dy = ch.position.y - lastY
                                 lastY = ch.position.y
-                                var acc = (pull + dy).coerceAtLeast(0f)
+                                drag = (drag + dy).coerceAtLeast(0f)
                                 var n = 0
-                                while (acc >= threshold && n < 3) {
-                                    pull = 0f
-                                    startDrop()
-                                    acc -= threshold
+                                while (drag >= releaseT && n < 3) {
+                                    val extra = drag - releaseT
+                                    drag = releaseT
+                                    release()
+                                    drag = extra.coerceAtMost(releaseT * 0.9f)
                                     n++
                                 }
-                                pull = acc.coerceAtMost(threshold * 0.95f)
                             }
-                        }
-                        if (pull > 0f) {
-                            val p0 = pull
-                            scope.launch { animate(p0, 0f, animationSpec = tween(160)) { v, _ -> pull = v } }
                         }
                     }
                 }
         ) {
-            // الخيط
-            drawLine(
-                Brush.verticalGradient(listOf(Color.Transparent, style.thread, style.thread, Color.Transparent)),
-                Offset(cx, 0f), Offset(cx, size.height), strokeWidth = 1.6.dp.toPx(),
-            )
-            drawLine(Color.White.copy(alpha = 0.18f), Offset(cx - 0.5.dp.toPx(), 0f), Offset(cx - 0.5.dp.toPx(), size.height), strokeWidth = 0.6.dp.toPx())
-
-            fun alphaFor(y: Float) = when {
-                y < topY(0f) -> clamp01(1f - (topY(0f) - y) / pitch)
-                y > botY(2f) -> clamp01(1f - (y - botY(2f)) / pitch)
-                else -> 1f
-            }
-            val dest = botY(0f)
-            val falling = drops.map { d -> val t = d.t.value; d.y0 + (dest - d.y0) * t * t }
-            val push = falling.sumOf { y -> (y + pitch - dest).coerceIn(0f, pitch).toDouble() }.toFloat()
-            val pend = pending()
-
-            // المجموعة السفلى (تُدفع بالخرزة الساقطة)
-            for (j in 3 downTo 0) {
-                val y = botY(j.toFloat()) + push
-                drawBead(style, Offset(cx, y), r, alphaFor(y))
-            }
-            // المجموعة العليا (تنزل خانة، وتدخل خرزة جديدة من الأعلى)
-            var m = 0
-            while (m < 12) {
-                val y = topY(2f - m - pend) + if (m == 0) pull else 0f
-                if (y < topY(-1.05f)) break
-                drawBead(style, Offset(cx, y), r, alphaFor(y))
-                m++
-            }
-            // الخرزات الساقطة
-            falling.forEach { y -> drawBead(style, Offset(cx, y), r, 1f) }
+            val dest = g.botTop
+            val falling = drops.map { d -> val t = d.t.value; d.index to d.y0 + (dest - d.y0) * t * t }
+            drawStrand(g, pos, falling, pending(), drag, bg)
         }
+    }
+}
+
+/** خيط ثابت للمعاينة في شاشة الأشكال. */
+@Composable
+fun StrandPreview(art: BeadArt, bg: Color, modifier: Modifier = Modifier) {
+    val density = LocalDensity.current
+    Canvas(modifier.clipToBounds()) {
+        val beadW = min(size.width * 0.66f, 90.dp.toPx())
+        val g = StrandGeom(art, size.width, size.height, beadW, size.height * 0.40f, size.height * 0.62f, with(density) { 0.5.dp.toPx() })
+        drawStrand(g, 32, emptyList(), 0f, 0f, bg)
     }
 }

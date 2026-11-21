@@ -1,7 +1,11 @@
 package com.adel.subha.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,9 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,8 +57,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -79,7 +78,7 @@ private fun Bar(title: String, onBack: () -> Unit) {
     TopAppBar(
         title = { Text(title, fontWeight = FontWeight.Bold) },
         navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع") } },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = RoyalGreenDeep, titleContentColor = Gold, navigationIconContentColor = GoldPale),
+        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background, titleContentColor = Gold, navigationIconContentColor = GoldPale),
     )
 }
 
@@ -91,7 +90,7 @@ private fun TargetChips(target: Int, onPick: (Int) -> Unit) {
                 selected = target == n,
                 onClick = { onPick(n) },
                 label = { Text(if (n == 0) "بلا حد" else n.ar()) },
-                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Gold, selectedLabelColor = RoyalGreenDeep),
+                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Gold, selectedLabelColor = Color(0xFF1A1405)),
             )
         }
     }
@@ -111,7 +110,7 @@ fun AdhkarScreen(state: AppState, onBack: () -> Unit) {
                 onClick = { adding = true },
                 icon = { Icon(Icons.Default.Add, null) },
                 text = { Text("إضافة ذكر") },
-                containerColor = Gold, contentColor = RoyalGreenDeep,
+                containerColor = Gold, contentColor = Color(0xFF1A1405),
             )
         },
     ) { pad ->
@@ -125,7 +124,7 @@ fun AdhkarScreen(state: AppState, onBack: () -> Unit) {
                 Surface(
                     onClick = { state.select(d.id); onBack() },
                     shape = RoundedCornerShape(18.dp),
-                    color = if (selected) Color(0xFF175F40) else MaterialTheme.colorScheme.surface,
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                     border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Gold else Gold.copy(alpha = 0.2f)),
                 ) {
                     Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -215,38 +214,44 @@ private fun DhikrDialog(d: Dhikr?, state: AppState, onDismiss: () -> Unit) {
 
 @Composable
 fun BeadsScreen(state: AppState, onBack: () -> Unit) {
-    Scaffold(topBar = { Bar("شكل الخرزات", onBack) }) { pad ->
-        LazyVerticalGrid(
-            GridCells.Fixed(3),
-            Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = pad.calculateTopPadding() + 12.dp, bottom = pad.calculateBottomPadding() + 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            items(BEAD_STYLES, key = { it.id }) { st ->
-                val selected = st.id == state.beadStyle
-                Surface(
-                    onClick = { state.setBead(st.id) },
-                    shape = RoundedCornerShape(18.dp),
-                    color = if (selected) Color(0xFF175F40) else MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Gold else Gold.copy(alpha = 0.18f)),
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 10.dp)) {
-                        Canvas(Modifier.fillMaxWidth().height(150.dp)) {
-                            val cx = size.width / 2
-                            val r = minOf(size.width * 0.2f, size.height / (3.4f * 2 * st.shape.h))
-                            val pitch = 2 * st.ry(r) + 2.dp.toPx()
-                            drawLine(
-                                Brush.verticalGradient(listOf(Color.Transparent, st.thread, Color.Transparent)),
-                                Offset(cx, 0f), Offset(cx, size.height), strokeWidth = 1.5.dp.toPx(),
-                            )
-                            val y0 = size.height / 2 - pitch
-                            for (k in 0..2) drawBead(st, Offset(cx, y0 + k * pitch), r)
-                        }
-                        Text(st.name, style = MaterialTheme.typography.titleMedium, color = if (selected) Gold else Cream, textAlign = TextAlign.Center)
+    val d = state.current
+    val edge = edgeColor(state.background)
+    Scaffold(topBar = { Bar("شكل الخرز", onBack) }, containerColor = edge) { pad ->
+        Column(Modifier.fillMaxSize().padding(top = pad.calculateTopPadding(), bottom = pad.calculateBottomPadding())) {
+            Text(
+                d.text, Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.titleMedium, color = Cream.copy(alpha = 0.75f), textAlign = TextAlign.Center, maxLines = 2,
+            )
+            LazyRow(
+                Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(BEAD_STYLES, key = { it.id }) { st ->
+                    val selected = st.id == d.bead
+                    val art = rememberBeadArt(st)
+                    Column(
+                        Modifier
+                            .width(104.dp)
+                            .fillMaxHeight()
+                            .clickable { state.setBead(st.id) },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        StrandPreview(art, edge, Modifier.weight(1f).fillMaxWidth())
+                        Spacer(Modifier.height(6.dp))
+                        Text(st.name, style = MaterialTheme.typography.titleMedium, color = if (selected) st.accent else Cream.copy(alpha = 0.7f), fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                        Box(
+                            Modifier.padding(top = 4.dp).width(28.dp).height(3.dp)
+                                .background(if (selected) st.accent else Color.Transparent, RoundedCornerShape(2.dp))
+                        )
+                        Spacer(Modifier.height(8.dp))
                     }
                 }
             }
+            TextButton(
+                onClick = { state.setBead(d.bead, all = true) },
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(bottom = 8.dp),
+            ) { Text("استعمال هذا الخرز لكل الأذكار") }
         }
     }
 }
@@ -295,7 +300,18 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onBeads: () -> Unit, onA
             )
 
             Section("المظهر والأذكار")
-            NavRow("شكل الخرزات", beadStyle(state.beadStyle).name, onBeads)
+            NavRow("شكل الخرز للذكر الحالي", beadStyle(d.bead).name, onBeads)
+            Text("الخلفية", Modifier.padding(start = 20.dp, top = 8.dp, bottom = 4.dp), style = MaterialTheme.typography.titleSmall, color = Cream)
+            Row(Modifier.padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("black" to "سوداء", "green" to "خضراء ملكية").forEach { (id, name) ->
+                    FilterChip(
+                        selected = state.background == id,
+                        onClick = { state.changeBackground(id) },
+                        label = { Text(name) },
+                        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Gold, selectedLabelColor = Color(0xFF1A1405)),
+                    )
+                }
+            }
             NavRow("الأذكار", "${state.adhkar.size.ar()} أذكار — إضافة وتعديل وترتيب", onAdhkar)
 
             Spacer(Modifier.height(24.dp))
@@ -321,7 +337,7 @@ private fun SwitchRow(title: String, sub: String?, value: Boolean, onChange: (Bo
         headlineContent = { Text(title) },
         supportingContent = if (sub != null) ({ Text(sub) }) else null,
         trailingContent = {
-            Switch(value, onChange, colors = SwitchDefaults.colors(checkedThumbColor = RoyalGreenDeep, checkedTrackColor = Gold))
+            Switch(value, onChange, colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF1A1405), checkedTrackColor = Gold))
         },
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         modifier = Modifier.padding(horizontal = 4.dp),

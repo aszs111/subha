@@ -1,7 +1,7 @@
 <resources>
     <style name="Theme.Subha" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#0A3F2A</item>
-        <item name="android:statusBarColor">#0A3F2A</item>
-        <item name="android:navigationBarColor">#062B1C</item>
+        <item name="android:windowBackground">#040404</item>
+        <item name="android:statusBarColor">#040404</item>
+        <item name="android:navigationBarColor">#040404</item>
     </style>
 </resources>

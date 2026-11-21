@@ -64,22 +64,47 @@ private val Scheme = darkColorScheme(
     outline = Color(0xFF8C8461), outlineVariant = Color(0xFF3E6A50),
 )
 
+private val Night = darkColorScheme(
+    primary = Gold, onPrimary = Color(0xFF1A1405),
+    primaryContainer = Color(0xFF3A3220), onPrimaryContainer = GoldPale,
+    secondary = GoldPale, onSecondary = Color(0xFF1A1405),
+    background = Color(0xFF080808), onBackground = Cream,
+    surface = Color(0xFF141414), onSurface = Cream,
+    surfaceVariant = Color(0xFF1E1E1E), onSurfaceVariant = Color(0xFFCFC8B4),
+    surfaceContainer = Color(0xFF161616), surfaceContainerHigh = Color(0xFF1C1C1C),
+    surfaceContainerHighest = Color(0xFF242424), surfaceContainerLow = Color(0xFF111111),
+    outline = Color(0xFF7D7663), outlineVariant = Color(0xFF3A3830),
+)
+
+/** لون شريط العنوان وبطاقة العنصر المختار حسب الخلفية. */
+fun barColor(bg: String) = if (bg == "green") RoyalGreenDeep else Color(0xFF0B0B0B)
+fun selectedCard(bg: String) = if (bg == "green") Color(0xFF175F40) else Color(0xFF2A2416)
+
 @Composable
-fun SubhaTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = Scheme, typography = Typography().withFamily(Markazi)) {
+fun SubhaTheme(bg: String, content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = if (bg == "green") Scheme else Night, typography = Typography().withFamily(Markazi)) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl, content = content)
     }
 }
 
-/** الخلفية الخضراء الملكية مع نقش نجمي ثماني خافت. */
+val Ink = Color(0xFF040404)
+
+/** لون حافة الخلفية (لتلاشي الخرز في أعلى الشاشة وأسفلها). */
+fun edgeColor(bg: String) = if (bg == "green") RoyalGreenDeep else Ink
+
+/** الخلفية: سوداء (كالأصل) أو خضراء ملكية بنقش نجمي خافت. */
 @Composable
-fun RoyalBackground(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+fun RoyalBackground(bg: String, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    val green = bg == "green"
     Box(
         modifier
             .fillMaxSize()
-            .background(Brush.radialGradient(listOf(RoyalGreenLight, RoyalGreen, RoyalGreenDeep), radius = 1900f))
+            .background(
+                if (green) Brush.radialGradient(listOf(RoyalGreenLight, RoyalGreen, RoyalGreenDeep), radius = 1900f)
+                else Brush.radialGradient(listOf(Color(0xFF141414), Ink), radius = 1500f)
+            )
     ) {
-        Canvas(Modifier.fillMaxSize()) {
+        if (green) Canvas(Modifier.fillMaxSize()) {
             val cell = 96.dp.toPx()
             val stroke = Stroke(width = 1.dp.toPx())
             val col = Gold.copy(alpha = 0.07f)

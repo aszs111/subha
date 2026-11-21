@@ -19,18 +19,20 @@ adb shell settings put global hide_error_dialogs 1
 adb install -r app.apk
 adb shell am start -n $PKG/.MainActivity; sleep 8
 shot 01_main
-# سحب على الخرز (يمين الشاشة) لإسقاط خرزات
-for i in 1 2 3 4 5; do adb shell input swipe 940 700 940 1500 450; sleep 0.4; done
+for i in 1 2 3 4 5 6; do adb shell input swipe 864 600 864 1500 500; sleep 0.3; done
 sleep 1; shot 02_after_swipes
-adb shell input swipe 940 700 940 1000 900 &
-sleep 0.45; shot 03_mid_drop; wait; sleep 1
-# الضغط على الذكر (يسار الشاشة)
-tap_text "الأذكار ‹" || adb shell input tap 330 800; sleep 2; shot 04_adhkar
+adb shell input swipe 864 700 864 820 2500 &
+sleep 1.6; shot 03_mid_drag; wait; sleep 1
+for i in $(seq 1 14); do adb shell input swipe 864 600 864 1500 400; done
+sleep 1; shot 04_near_target
+for i in $(seq 1 6); do adb shell input swipe 864 600 864 1500 400; done
+sleep 2.5; shot 05_auto_next
+tap_text "الأذكار" || adb shell input tap 330 900; sleep 2; shot 06_adhkar
 adb shell input keyevent 4; sleep 1
-# الضغط على الخرز → شكل الخرزات
-tap_text "الخرزات" || adb shell input tap 940 1200; sleep 2; shot 05_beads
-tap_text "كهرمان" && sleep 1 && adb shell input keyevent 4 && sleep 1 && shot 05b_amber
-tap_text "الإعدادات" || adb shell input tap 80 170; sleep 2; shot 06_settings
+tap_text "الخرزات" || adb shell input tap 864 1200; sleep 2; shot 07_beads
+tap_text "كهرمان" && sleep 1 && adb shell input keyevent 4 && sleep 1 && shot 08_amber
+tap_text "الإعدادات" || adb shell input tap 80 170; sleep 2; shot 09_settings
+adb shell input swipe 540 1800 540 700 400; sleep 1; shot 10_settings2
 adb shell input keyevent 4; sleep 1
 adb shell pidof $PKG || echo "APP DIED"
 adb logcat -d | grep -A20 "FATAL EXCEPTION" | head -40 > $OUT/crash.txt
