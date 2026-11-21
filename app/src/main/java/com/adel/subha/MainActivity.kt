@@ -32,7 +32,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         val state = AppState(applicationContext)
-        feedback = Feedback(applicationContext)
+        feedback = Feedback(applicationContext) { state.volume }
         setContent { SubhaTheme(state.background) { App(state, feedback) } }
     }
 

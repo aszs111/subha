@@ -14,17 +14,18 @@ data class BeadStyle(
     val thread: Color,
     val accent: Color,
     val translucent: Boolean = false,
+    val button: Color = accent,
 )
 
 val BEAD_STYLES = listOf(
-    BeadStyle("olive", "زيتون", Color(0xFFC9A25A), Color(0xFFE2C27A)),
-    BeadStyle("amber", "كهرمان", Color(0xFF8E1F1F), Color(0xFFF0A63A), translucent = true),
-    BeadStyle("turquoise", "فيروز", Color(0xFF3E6FA8), Color(0xFF4FD4E8)),
-    BeadStyle("yusr", "يُسر", Color(0xFFA08A55), Color(0xFFD9C08A)),
-    BeadStyle("agate", "عقيق", Color(0xFFD9B95B), Color(0xFFF08A6A)),
-    BeadStyle("lapis", "لازورد", Color(0xFFD9B95B), Color(0xFF9DB4FF)),
-    BeadStyle("pearl", "لؤلؤ", Color(0xFFE8E0CC), Color(0xFFF3E6BE)),
-    BeadStyle("jade", "يَشْم", Color(0xFFD9B95B), Color(0xFF7BD9A0)),
+    BeadStyle("olive", "زيتون", Color(0xFFC9A25A), Color(0xFFE2C27A), button = Color(0xFFB8873F)),
+    BeadStyle("amber", "كهرمان", Color(0xFF8E1F1F), Color(0xFFF0A63A), translucent = true, button = Color(0xFFE27A12)),
+    BeadStyle("turquoise", "فيروز", Color(0xFF3E6FA8), Color(0xFF4FD4E8), button = Color(0xFF27A7C2)),
+    BeadStyle("yusr", "يُسر", Color(0xFFA08A55), Color(0xFFD9C08A), button = Color(0xFF3A3530)),
+    BeadStyle("agate", "عقيق", Color(0xFFD9B95B), Color(0xFFF08A6A), button = Color(0xFFB8301F)),
+    BeadStyle("lapis", "لازورد", Color(0xFFD9B95B), Color(0xFF9DB4FF), button = Color(0xFF2B48B0)),
+    BeadStyle("pearl", "لؤلؤ", Color(0xFFE8E0CC), Color(0xFFF3E6BE), button = Color(0xFFE6DDCB)),
+    BeadStyle("jade", "يَشْم", Color(0xFFD9B95B), Color(0xFF7BD9A0), button = Color(0xFF2F8F5B)),
 )
 
 fun beadStyle(id: String) = BEAD_STYLES.firstOrNull { it.id == id } ?: BEAD_STYLES.first()

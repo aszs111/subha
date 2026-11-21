@@ -44,6 +44,10 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
@@ -129,9 +133,9 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
             }
             // زر النقر الكبير بلون الخرز في الزاوية اليسرى السفلى
             TapButton(
-                art.style.accent,
+                art.style.button,
                 onTap = { controller.tap() },
-                modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 0.dp, end = 26.dp, bottom = 30.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 26.dp, bottom = 62.dp),
             )
             }
         }
@@ -147,6 +151,27 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
                 }
             }) { Icon(Icons.Default.Refresh, contentDescription = "إعادة", tint = Cream.copy(alpha = 0.5f)) }
             IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, contentDescription = "الإعدادات", tint = Cream.copy(alpha = 0.5f)) }
+        }
+        // شريط الصوت الشفاف أسفل الشاشة
+        Row(
+            Modifier.align(Alignment.BottomEnd).fillMaxWidth(0.60f)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(start = 6.dp, end = 14.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.AutoMirrored.Filled.VolumeDown, contentDescription = null, tint = Cream.copy(alpha = 0.35f), modifier = Modifier.size(20.dp))
+            Slider(
+                value = state.volume,
+                onValueChange = { state.changeVolume(it) },
+                onValueChangeFinished = { if (state.sound) fb.clack() },
+                modifier = Modifier.weight(1f).height(36.dp).semantics { contentDescription = "مستوى الصوت" },
+                colors = SliderDefaults.colors(
+                    thumbColor = Cream.copy(alpha = 0.75f),
+                    activeTrackColor = Cream.copy(alpha = 0.32f),
+                    inactiveTrackColor = Cream.copy(alpha = 0.10f),
+                ),
+            )
+            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Cream.copy(alpha = 0.35f), modifier = Modifier.size(20.dp))
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing))
     }
@@ -228,7 +253,7 @@ private fun DhikrPanel(state: AppState, d: Dhikr, accent: Color, onAdhkar: () ->
             style = MaterialTheme.typography.titleMedium, letterSpacing = 1.sp,
         )
         Spacer(Modifier.weight(1f))
-        Spacer(Modifier.height(130.dp)) // مكان زر النقر
+        Spacer(Modifier.height(176.dp)) // مكان زر النقر وشريط الصوت
     }
 }
 

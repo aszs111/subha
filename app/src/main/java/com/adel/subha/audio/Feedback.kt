@@ -10,7 +10,7 @@ import com.adel.subha.R
 import kotlin.random.Random
 
 /** صوت فرقعة الخرز والاهتزاز. */
-class Feedback(context: Context) {
+class Feedback(context: Context, private val volume: () -> Float = { 1f }) {
     private val pool = SoundPool.Builder()
         .setMaxStreams(6)
         .setAudioAttributes(
@@ -24,11 +24,11 @@ class Feedback(context: Context) {
     private val vibrator: Vibrator? = context.getSystemService(Vibrator::class.java)
 
     fun clack() {
-        val v = 0.75f + Random.nextFloat() * 0.25f
+        val v = (0.75f + Random.nextFloat() * 0.25f) * volume()
         pool.play(clacks.random(), v, v, 1, 0, 0.94f + Random.nextFloat() * 0.12f)
     }
 
-    fun done() { pool.play(done, 1f, 1f, 2, 0, 1f) }
+    fun done() { pool.play(done, volume(), volume(), 2, 0, 1f) }
 
     fun tick() {
         val vb = vibrator ?: return
