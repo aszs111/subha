@@ -16,6 +16,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.adel.subha.audio.VoiceCounter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -106,22 +108,59 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
     // ───── العدّ بالصوت ─────
     var listening by remember { mutableStateOf(false) }
     var level by remember { mutableFloatStateOf(0f) }
+    val reject = remember { Animatable(0f) }
+    var enrollFor by remember { mutableStateOf<Dhikr?>(null) }
     val voice = remember {
-        VoiceCounter(onUtterance = { controllers[state.currentId]?.tap() }, onLevel = { level = it })
+        VoiceCounter(
+            onUtterance = { controllers[state.currentId]?.tap() },
+            onLevel = { level = it },
+            onReject = { scope.launch { reject.snapTo(1f); reject.animateTo(0f, tween(600)) } },
+        )
     }
-    LaunchedEffect(state.currentId) { voice.expectFor(state.current.text) }
     LaunchedEffect(state.voiceSensitivity) { voice.sensitivity = state.voiceSensitivity }
+    LaunchedEffect(state.matchStrict) { voice.strict = state.strictValue }
     val context = LocalContext.current
+
+    fun startListening() {
+        if (!state.voices.has(state.currentId)) { enrollFor = state.current; return }
+        voice.start(scope); listening = true
+        scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar("قل الذكر، وتسقط خرزة مع كل مرة يطابق فيها بصمتك") }
+    }
+    // بصمة الذكر الحالي وبصمات غيره (للمفاضلة)
+    LaunchedEffect(state.currentId, state.voiceRev) {
+        val id = state.currentId
+        val ids = state.adhkar.map { it.id }
+        val (cur, others) = withContext(Dispatchers.IO) {
+            state.voices.get(id) to ids.filter { it != id }.mapNotNull { state.voices.get(it) }
+        }
+        voice.model = cur
+        voice.others = others
+        if (listening && cur == null) {
+            voice.stop(); listening = false
+            snackbar.currentSnackbarData?.dismiss()
+            val r = snackbar.showSnackbar("لم تُسجَّل بصمة هذا الذكر بعد", actionLabel = "سجّلها")
+            if (r == SnackbarResult.ActionPerformed) enrollFor = state.current
+        }
+    }
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) { voice.start(scope); listening = true }
+        if (ok) startListening()
         else scope.launch { snackbar.showSnackbar("العدّ بالصوت يحتاج إذن الميكروفون") }
     }
     fun toggleVoice() {
         if (listening) { voice.stop(); listening = false; return }
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            voice.start(scope); listening = true
-            scope.launch { snackbar.currentSnackbarData?.dismiss(); snackbar.showSnackbar("قل الذكر، واسكت لحظة بعد كل مرة") }
-        } else askMic.launch(Manifest.permission.RECORD_AUDIO)
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startListening()
+        else askMic.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    enrollFor?.let { d ->
+        EnrollDialog(state, d) { saved ->
+            enrollFor = null
+            if (saved && d.id == state.currentId) {
+                scope.launch {
+                    voice.model = withContext(Dispatchers.IO) { state.voices.get(d.id) }
+                    voice.start(scope); listening = true
+                }
+            }
+        }
     }
     // يتوقف الاستماع إذا خرجتَ من الشاشة أو من التطبيق
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -185,7 +224,7 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
             )
             // زر الميكروفون بجوار زر النقر
             MicButton(
-                on = listening, level = level, color = art.style.button,
+                on = listening, level = level, reject = reject.value, color = art.style.button,
                 onClick = { toggleVoice() },
                 modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 152.dp, bottom = 90.dp),
             )
@@ -368,12 +407,13 @@ private fun TapButton(color: Color, onTap: () -> Unit, modifier: Modifier = Modi
 }
 
 @Composable
-private fun MicButton(on: Boolean, level: Float, color: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun MicButton(on: Boolean, level: Float, reject: Float, color: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(modifier.size(56.dp), contentAlignment = Alignment.Center) {
         if (on) {
-            // حلقة تنبض مع مستوى الصوت
+            // حلقة تنبض مع مستوى الصوت، وتومض رمادية إذا سُمع كلام لا يطابق الذكر
             Canvas(Modifier.fillMaxSize()) {
                 drawCircle(color.copy(alpha = 0.25f + 0.5f * level), radius = size.minDimension / 2 * (0.78f + 0.22f * level))
+                if (reject > 0f) drawCircle(Color(0xFF9E9E9E).copy(alpha = 0.8f * reject), radius = size.minDimension / 2, style = Stroke(3.dp.toPx()))
             }
         }
         Box(

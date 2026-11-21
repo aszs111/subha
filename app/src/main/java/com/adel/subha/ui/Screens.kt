@@ -29,6 +29,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicNone
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
@@ -102,6 +104,7 @@ private fun TargetChips(target: Int, onPick: (Int) -> Unit) {
 @Composable
 fun AdhkarScreen(state: AppState, onBack: () -> Unit) {
     var editing by remember { mutableStateOf<Dhikr?>(null) }
+    var enrolling by remember { mutableStateOf<Dhikr?>(null) }
     var adding by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -141,6 +144,14 @@ fun AdhkarScreen(state: AppState, onBack: () -> Unit) {
                                 style = MaterialTheme.typography.bodyMedium, color = GoldPale.copy(alpha = 0.7f),
                             )
                         }
+                        val hasVoice = remember(state.voiceRev, d.id) { state.voices.has(d.id) }
+                        IconButton(onClick = { enrolling = d }) {
+                            Icon(
+                                if (hasVoice) Icons.Default.Mic else Icons.Default.MicNone,
+                                contentDescription = if (hasVoice) "بصمة الصوت مسجّلة" else "تسجيل بصمة الصوت",
+                                tint = if (hasVoice) Gold else GoldPale.copy(alpha = 0.5f),
+                            )
+                        }
                         IconButton(onClick = { editing = d }) { Icon(Icons.Default.Edit, contentDescription = "تعديل", tint = GoldPale) }
                     }
                 }
@@ -149,6 +160,7 @@ fun AdhkarScreen(state: AppState, onBack: () -> Unit) {
     }
 
     if (adding) DhikrDialog(null, state, onDismiss = { adding = false })
+    enrolling?.let { d -> EnrollDialog(state, d) { enrolling = null } }
     editing?.let { d -> DhikrDialog(d, state, onDismiss = { editing = null }) }
 }
 
@@ -274,24 +286,31 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onBeads: () -> Unit, onA
             SwitchRow("إبقاء الشاشة مضاءة", "أثناء التسبيح في الشاشة الرئيسية", state.keepOn, state::changeKeepOn)
             SwitchRow("تأرجح الخيط مع ميل الجوال", "يتدلى الخيط ويتأرجح كالمسبحة الحقيقية", state.sway, state::changeSway)
 
-            Section("العدّ بالصوت")
+            Section("العدّ بالصوت (بصمة صوتك)")
             Text(
-                "اضغط زر الميكروفون في الشاشة الرئيسية، ثم قل الذكر واسكت لحظة بعد كل مرة، فتسقط خرزة مع كل تكرار. " +
-                    "يعمل على الجهاز دون إنترنت ولا يحفظ الصوت. وهو يعدّ النطق لا الكلمات، فأي كلام آخر قد يُحسب.",
+                "سجّل كل ذكر بصوتك ثلاث مرات (زر الميكروفون في قائمة الأذكار)، ثم اضغط زر الميكروفون في الشاشة الرئيسية وقل الذكر: " +
+                    "تسقط خرزة كلما طابق نطقُك البصمة، ولا يستجيب لغيره. وكلما سجّلتَ أذكارًا أكثر زاد التمييز بينها. " +
+                    "يعمل على الجهاز دون إنترنت ولا يحفظ تسجيلاتك الصوتية، بل بصمتها فقط.",
                 Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
                 style = MaterialTheme.typography.bodyMedium, color = GoldPale.copy(alpha = 0.75f),
             )
-            Text("الحساسية", Modifier.padding(start = 20.dp, top = 4.dp), style = MaterialTheme.typography.titleSmall, color = Cream)
-            Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("منخفضة", style = MaterialTheme.typography.bodySmall, color = Cream.copy(alpha = 0.6f))
-                Slider(
-                    value = state.voiceSensitivity, onValueChange = { state.changeVoiceSensitivity(it) },
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                )
-                Text("عالية", style = MaterialTheme.typography.bodySmall, color = Cream.copy(alpha = 0.6f))
+            val hasVoice = remember(state.voiceRev, d.id) { state.voices.has(d.id) }
+            var enrollHere by remember { mutableStateOf(false) }
+            Row(Modifier.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { enrollHere = true }) {
+                    Text(if (hasVoice) "إعادة تسجيل بصمة «${d.text.take(24)}»" else "تسجيل بصمة «${d.text.take(24)}»")
+                }
+                if (hasVoice) TextButton(onClick = { state.deleteVoice(d.id) }) { Text("حذف", color = MaterialTheme.colorScheme.error) }
             }
+            if (enrollHere) EnrollDialog(state, d) { enrollHere = false }
+            LabeledSlider("حساسية الميكروفون", "منخفضة", "عالية", state.voiceSensitivity) { state.changeVoiceSensitivity(it) }
             Text(
-                "ارفعها إن كان صوتك خافتًا، واخفضها في المكان المزعج.",
+                "ارفعها إن كان صوتك خافتًا أو الجوال بعيدًا، واخفضها في المكان المزعج.",
+                Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall, color = Cream.copy(alpha = 0.5f),
+            )
+            LabeledSlider("دقة التمييز", "متساهل", "صارم", state.matchStrict) { state.changeMatchStrict(it) }
+            Text(
+                "إن رفض نطقك الصحيح أحيانًا فاجعله أكثر تساهلًا، وإن استجاب لكلام آخر فاجعله أشد صرامة.",
                 Modifier.padding(horizontal = 20.dp), style = MaterialTheme.typography.bodySmall, color = Cream.copy(alpha = 0.5f),
             )
 
@@ -377,5 +396,15 @@ private fun NavRow(title: String, sub: String, onClick: () -> Unit) {
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             modifier = Modifier.padding(horizontal = 4.dp),
         )
+    }
+}
+
+@Composable
+private fun LabeledSlider(title: String, lo: String, hi: String, value: Float, onChange: (Float) -> Unit) {
+    Text(title, Modifier.padding(start = 20.dp, top = 8.dp), style = MaterialTheme.typography.titleSmall, color = Cream)
+    Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(lo, style = MaterialTheme.typography.bodySmall, color = Cream.copy(alpha = 0.6f))
+        Slider(value = value, onValueChange = onChange, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
+        Text(hi, style = MaterialTheme.typography.bodySmall, color = Cream.copy(alpha = 0.6f))
     }
 }
