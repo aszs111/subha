@@ -263,9 +263,9 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onBeads: () -> Unit, onA
                 .padding(top = pad.calculateTopPadding(), bottom = pad.calculateBottomPadding() + 24.dp)
         ) {
             Section("التنبيه")
-            SwitchRow("صوت فرقعة الخرز", null, state.sound, state::setSound)
-            SwitchRow("الاهتزاز مع كل خرزة", "واهتزاز أطول عند إتمام العدد", state.vibrate, state::setVibrate)
-            SwitchRow("إبقاء الشاشة مضاءة", "أثناء التسبيح في الشاشة الرئيسية", state.keepOn, state::setKeepOn)
+            SwitchRow("صوت فرقعة الخرز", null, state.sound, state::changeSound)
+            SwitchRow("الاهتزاز مع كل خرزة", "واهتزاز أطول عند إتمام العدد", state.vibrate, state::changeVibrate)
+            SwitchRow("إبقاء الشاشة مضاءة", "أثناء التسبيح في الشاشة الرئيسية", state.keepOn, state::changeKeepOn)
 
             Section("الخطة")
             Column(Modifier.padding(horizontal = 20.dp)) {
@@ -291,7 +291,7 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onBeads: () -> Unit, onA
             SwitchRow(
                 "الانتقال تلقائيًا إلى الذكر التالي عند الإتمام",
                 "لورد متتابع، كأذكار ما بعد الصلاة: التسبيح ثم التحميد ثم التكبير، بترتيب قائمة الأذكار",
-                state.autoNext, state::setAutoNext,
+                state.autoNext, state::changeAutoNext,
             )
 
             Section("المظهر والأذكار")

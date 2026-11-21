@@ -137,10 +137,10 @@ class AppState(context: Context) {
         replace(d.copy(total = 0))
     }
 
-    fun setSound(v: Boolean) { sound = v; prefs.edit().putBoolean("sound", v).apply() }
-    fun setVibrate(v: Boolean) { vibrate = v; prefs.edit().putBoolean("vibrate", v).apply() }
-    fun setKeepOn(v: Boolean) { keepOn = v; prefs.edit().putBoolean("keepOn", v).apply() }
-    fun setAutoNext(v: Boolean) { autoNext = v; prefs.edit().putBoolean("autoNext", v).apply() }
+    fun changeSound(v: Boolean) { sound = v; prefs.edit().putBoolean("sound", v).apply() }
+    fun changeVibrate(v: Boolean) { vibrate = v; prefs.edit().putBoolean("vibrate", v).apply() }
+    fun changeKeepOn(v: Boolean) { keepOn = v; prefs.edit().putBoolean("keepOn", v).apply() }
+    fun changeAutoNext(v: Boolean) { autoNext = v; prefs.edit().putBoolean("autoNext", v).apply() }
     fun setBead(id: String) { beadStyle = id; prefs.edit().putString("bead", id).apply() }
 }
 
