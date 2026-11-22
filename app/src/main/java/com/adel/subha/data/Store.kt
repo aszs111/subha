@@ -57,6 +57,14 @@ class AppState(context: Context) {
     /** بصمات الصوت المسجّلة؛ voiceRev يتغيّر عند كل حفظ أو حذف. */
     val voices = VoiceStore(context)
     var voiceRev by mutableIntStateOf(0); private set
+    /** التلميحات: لا تظهر إن اختار المستخدم ذلك؛ وتظهر مرة في كل تشغيل حتى يختار. */
+    var tipsOff by mutableStateOf(prefs.getBoolean("tipsOff", false)); private set
+    var tipsPending by mutableStateOf(!prefs.getBoolean("tipsOff", false))
+    fun closeTips(never: Boolean) {
+        tipsPending = false
+        if (never) { tipsOff = true; prefs.edit().putBoolean("tipsOff", true).apply() }
+    }
+    fun replayTips() { tipsOff = false; prefs.edit().putBoolean("tipsOff", false).apply(); tipsPending = true }
     var sway by mutableStateOf(prefs.getBoolean("sway", true)); private set
     var volume by mutableStateOf(prefs.getFloat("volume", 0.8f)); private set
     var background by mutableStateOf(prefs.getString("bg", "black") ?: "black"); private set

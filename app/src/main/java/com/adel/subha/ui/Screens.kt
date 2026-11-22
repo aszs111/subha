@@ -356,6 +356,10 @@ fun SettingsScreen(state: AppState, onBack: () -> Unit, onBeads: () -> Unit, onA
             }
             NavRow("الأذكار", "${state.adhkar.size.ar()} أذكار — إضافة وتعديل وترتيب", onAdhkar)
 
+            Section("التلميحات")
+            TextButton(onClick = { state.replayTips(); onBack() }, modifier = Modifier.padding(horizontal = 12.dp)) {
+                Text("عرض التلميحات من جديد")
+            }
             Spacer(Modifier.height(24.dp))
             Text(
                 "سُبحة · الإصدار ${BuildConfig.VERSION_NAME}",

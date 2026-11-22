@@ -11,6 +11,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -104,6 +106,17 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
     val scope = rememberCoroutineScope()
     val edge = edgeColor(state.background)
     val controllers = remember { mutableMapOf<Long, StrandController>() }
+    val tipTargets = remember { TipTargets() }
+    val haptic = LocalHapticFeedback.current
+
+    fun doReset() {
+        val old = state.reset()
+        if (old > 0) scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val r = snackbar.showSnackbar("أُعيد العدّ إلى الصفر", actionLabel = "تراجع")
+            if (r == SnackbarResult.ActionPerformed) state.restoreCount(old)
+        }
+    }
 
     // ───── العدّ بالصوت ─────
     var listening by remember { mutableStateOf(false) }
@@ -170,6 +183,7 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
         onDispose { lifecycle.removeObserver(obs); voice.stop() }
     }
 
+    ProvideTipTargets(tipTargets) {
     RoyalBackground(state.background) {
         AnimatedContent(
             targetState = state.currentId,
@@ -210,7 +224,7 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
                         if (state.vibrate) fb.tick()
                     },
                     onTap = onBeads,
-                    modifier = Modifier.fillMaxHeight().fillMaxWidth(0.40f),
+                    modifier = Modifier.fillMaxHeight().fillMaxWidth(0.40f).tipTarget("strand"),
                     controller = controller,
                     sway = state.sway,
                 )
@@ -220,34 +234,34 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
             TapButton(
                 art.style.button,
                 onTap = { controller.tap() },
-                modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 26.dp, bottom = 62.dp),
+                onLongPress = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    doReset()
+                },
+                modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 26.dp, bottom = 62.dp).tipTarget("tap"),
             )
             // زر الميكروفون بجوار زر النقر
             MicButton(
                 on = listening, level = level, reject = reject.value, color = art.style.button,
                 onClick = { toggleVoice() },
-                modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 152.dp, bottom = 90.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 152.dp, bottom = 90.dp).tipTarget("mic"),
             )
             }
         }
 
         // أزرار صغيرة في الزاوية اليسرى العليا
         Row(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(4.dp)) {
-            IconButton(onClick = {
-                val old = state.reset()
-                if (old > 0) scope.launch {
-                    snackbar.currentSnackbarData?.dismiss()
-                    val r = snackbar.showSnackbar("أُعيد العدّ إلى الصفر", actionLabel = "تراجع")
-                    if (r == SnackbarResult.ActionPerformed) state.restoreCount(old)
-                }
-            }) { Icon(Icons.Default.Refresh, contentDescription = "إعادة", tint = Cream.copy(alpha = 0.5f)) }
-            IconButton(onClick = onSettings) { Icon(Icons.Outlined.Settings, contentDescription = "الإعدادات", tint = Cream.copy(alpha = 0.5f)) }
+            IconButton(onClick = { doReset() }, modifier = Modifier.tipTarget("reset")) {
+                Icon(Icons.Default.Refresh, contentDescription = "إعادة", tint = Cream.copy(alpha = 0.5f))
+            }
+            IconButton(onClick = onSettings, modifier = Modifier.tipTarget("settings")) { Icon(Icons.Outlined.Settings, contentDescription = "الإعدادات", tint = Cream.copy(alpha = 0.5f)) }
         }
         // شريط الصوت الشفاف أسفل الشاشة
         Row(
             Modifier.align(Alignment.BottomEnd).fillMaxWidth(0.60f)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(start = 6.dp, end = 14.dp, bottom = 2.dp),
+                .padding(start = 6.dp, end = 14.dp, bottom = 2.dp)
+                .tipTarget("volume"),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.AutoMirrored.Filled.VolumeDown, contentDescription = null, tint = Cream.copy(alpha = 0.35f), modifier = Modifier.size(20.dp))
@@ -265,6 +279,14 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
             Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = Cream.copy(alpha = 0.35f), modifier = Modifier.size(20.dp))
         }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing))
+
+        // جولة التلميحات (أول مرة، وحتى يختار المستخدم ألّا تظهر)
+        if (state.tipsPending) {
+            var ready by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) { delay(700); ready = true }
+            if (ready) TipsOverlay(MAIN_TIPS, tipTargets) { never -> state.closeTips(never) }
+        }
+    }
     }
 }
 
@@ -306,7 +328,7 @@ private fun DhikrPanel(state: AppState, d: Dhikr, accent: Color, onAdhkar: () ->
             else -> 23.sp
         }
         Column(
-            Modifier.clickable(remember { MutableInteractionSource() }, indication = null, onClick = onAdhkar),
+            Modifier.tipTarget("dhikr").clickable(remember { MutableInteractionSource() }, indication = null, onClick = onAdhkar),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(d.text, color = Cream, fontSize = fs, lineHeight = fs * 1.5f, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
@@ -321,7 +343,7 @@ private fun DhikrPanel(state: AppState, d: Dhikr, accent: Color, onAdhkar: () ->
             color = if (done) accent else Cream,
             fontSize = if (d.count < 1000) 112.sp else 82.sp,
             lineHeight = 116.sp,
-            modifier = Modifier.scale(pop.value),
+            modifier = Modifier.tipTarget("count").scale(pop.value),
         )
         Text(
             if (d.target > 0) "من ${d.target.ar()}" else "بلا حد",
@@ -365,10 +387,11 @@ private fun Diamonds(filled: Int, color: Color) {
 }
 
 @Composable
-private fun TapButton(color: Color, onTap: () -> Unit, modifier: Modifier = Modifier) {
+private fun TapButton(color: Color, onTap: () -> Unit, onLongPress: () -> Unit, modifier: Modifier = Modifier) {
     val press = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
     val tapCb by rememberUpdatedState(onTap)
+    val longCb by rememberUpdatedState(onLongPress)
     Box(
         modifier
             .size(112.dp)
@@ -392,9 +415,10 @@ private fun TapButton(color: Color, onTap: () -> Unit, modifier: Modifier = Modi
                         scope.launch { press.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy)) }
                     },
                     onTap = { tapCb() },
+                    onLongPress = { longCb() },
                 )
             }
-            .semantics { contentDescription = "تسبيحة" },
+            .semantics { contentDescription = "تسبيحة (اضغط مطولًا للتصفير)" },
     ) {
         // لمعة
         Canvas(Modifier.fillMaxSize()) {
