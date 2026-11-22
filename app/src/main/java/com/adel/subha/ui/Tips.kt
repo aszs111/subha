@@ -119,31 +119,36 @@ fun TipsOverlay(tips: List<Tip>, targets: TipTargets, onClose: (never: Boolean) 
             }
         }
 
-        // بطاقة الشرح: فوق العنصر إن كان في النصف السفلي، وتحته إن كان في العلوي
-        val below = rect == null || rect.center.y < hPx * 0.45f
-        val cardY = when {
-            rect == null -> hPx * 0.35f
-            below -> minOf(rect.bottom + pad * 3, hPx * 0.62f)
-            else -> null
+        // بطاقة الشرح: بجانب العنصر الطويل، وتحت العنصر العلوي، وفوق العنصر السفلي
+        val wPx = constraints.maxWidth.toFloat()
+        val tall = rect != null && rect.height > hPx * 0.5f
+        val card = @Composable {
+            TipCard(
+                tip, step, tips.size,
+                onPrev = { if (step > 0) step-- },
+                onNext = { next() },
+                onSkip = { onClose(false) },
+            )
         }
-        val cardMod = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 22.dp)
         Box(Modifier.fillMaxSize()) {
-            val card = @Composable {
-                TipCard(
-                    tip, step, tips.size,
-                    onPrev = { if (step > 0) step-- },
-                    onNext = { next() },
-                    onSkip = { onClose(false) },
-                )
-            }
-            if (cardY != null) {
-                Box(cardMod.offset { IntOffset(0, cardY.toInt()) }) { card() }
-            } else {
-                // فوق العنصر
-                val bottomGap = with(density) { (hPx - rect!!.top + pad * 3).toDp() }
-                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = bottomGap)) { card() }
+            when {
+                rect == null -> Box(Modifier.fillMaxWidth().padding(horizontal = 22.dp).offset { IntOffset(0, (hPx * 0.35f).toInt()) }) { card() }
+                tall -> {
+                    // العنصر على اليمين: البطاقة في المساحة اليسرى
+                    val startGap = with(density) { (wPx - rect.left + pad * 2).toDp() }
+                    Box(
+                        Modifier.fillMaxWidth().padding(start = startGap, end = 14.dp)
+                            .offset { IntOffset(0, (hPx * 0.26f).toInt()) }
+                    ) { card() }
+                }
+                rect.center.y < hPx * 0.45f -> {
+                    val y = minOf(rect.bottom + pad * 3, hPx * 0.6f)
+                    Box(Modifier.fillMaxWidth().padding(horizontal = 22.dp).offset { IntOffset(0, y.toInt()) }) { card() }
+                }
+                else -> {
+                    val bottomGap = with(density) { (hPx - rect.top + pad * 3).toDp() }
+                    Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = bottomGap)) { card() }
+                }
             }
         }
 
@@ -153,7 +158,7 @@ fun TipsOverlay(tips: List<Tip>, targets: TipTargets, onClose: (never: Boolean) 
             border = BorderStroke(1.dp, Cream.copy(alpha = 0.5f)),
             // في الأسفل، إلا إذا كان العنصر المقصود هناك فيُنقل إلى الأعلى
             modifier = Modifier
-                .align(if (rect != null && rect.bottom > hPx * 0.85f) Alignment.TopCenter else Alignment.BottomCenter)
+                .align(if (rect != null && !tall && rect.bottom > hPx * 0.85f) Alignment.TopCenter else Alignment.BottomCenter)
                 .windowInsetsPadding(WindowInsets.safeDrawing).padding(vertical = 10.dp),
         ) { Text("لا تُظهر التلميحات مرة أخرى", color = Cream, style = MaterialTheme.typography.titleMedium) }
     }
