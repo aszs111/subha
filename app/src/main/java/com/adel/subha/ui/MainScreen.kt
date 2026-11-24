@@ -86,6 +86,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -364,14 +366,28 @@ private fun DhikrPanel(
                 Text("مطوّلًا: الأذكار · نقرتان: الفضل", color = Cream.copy(alpha = 0.4f), style = MaterialTheme.typography.bodyMedium)
             }
         }
-        Spacer(Modifier.height(26.dp))
-        Text(
-            d.count.ar(),
-            color = if (done) accent else Cream,
-            fontSize = if (d.count < 1000) 112.sp else 82.sp,
-            lineHeight = 116.sp,
-            modifier = Modifier.tipTarget("count").scale(pop.value),
-        )
+        Spacer(Modifier.height(18.dp))
+        // حلقة بلون الخرز تمتلئ مع العدّ (وبلا حد: تمتلئ كل ٣٣ ثم تبدأ من جديد)
+        val goal = if (d.target > 0) (d.count.toFloat() / d.target).coerceIn(0f, 1f)
+            else if (d.count == 0) 0f else ((d.count - 1) % 33 + 1) / 33f
+        val ring by animateFloatAsState(goal, tween(260), label = "ring")
+        Box(Modifier.tipTarget("count").size(186.dp), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val sw = 10.dp.toPx()
+                val tl = Offset(sw / 2, sw / 2)
+                val sz = Size(size.width - sw, size.height - sw)
+                drawArc(accent.copy(alpha = 0.16f), 0f, 360f, false, topLeft = tl, size = sz, style = Stroke(sw))
+                if (ring > 0f) drawArc(accent, -90f, 360f * ring, false, topLeft = tl, size = sz, style = Stroke(sw, cap = StrokeCap.Round))
+            }
+            Text(
+                d.count.ar(),
+                color = if (done) accent else Cream,
+                fontSize = when { d.count < 100 -> 96.sp; d.count < 1000 -> 74.sp; else -> 56.sp },
+                lineHeight = 100.sp,
+                modifier = Modifier.scale(pop.value),
+            )
+        }
+        Spacer(Modifier.height(6.dp))
         Text(
             if (d.target > 0) "من ${d.target.ar()}" else "بلا حد",
             color = Cream.copy(alpha = 0.5f), style = MaterialTheme.typography.titleMedium, letterSpacing = 2.sp,
