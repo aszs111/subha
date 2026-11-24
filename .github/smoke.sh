@@ -38,7 +38,11 @@ for i in $(seq 1 6); do adb shell input swipe 864 600 864 1500 400; done
 sleep 2.5; shot 05_auto_next
 tap_text "العدّ بالصوت"; sleep 2; shot 05b_mic_permission
 adb shell input keyevent 4; sleep 1
-tap_text "الأذكار" || adb shell input tap 330 900; sleep 2; shot 06_adhkar
+# نقرتان على الذكر = الفضل
+adb shell "input tap 330 520; sleep 0.12; input tap 330 520"; sleep 1.5; shot 05c_fadl
+adb shell input keyevent 4; sleep 1
+# ضغطة مطولة على الذكر = قائمة الأذكار
+adb shell input swipe 330 520 330 520 900; sleep 2; shot 06_adhkar
 adb shell input keyevent 4; sleep 1
 tap_text "الخرزات" || adb shell input tap 864 1200; sleep 2; shot 07_beads
 tap_text "كهرمان" && sleep 1 && adb shell input keyevent 4 && sleep 1 && shot 08_amber
