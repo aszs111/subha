@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -164,6 +165,12 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startListening()
         else askMic.launch(Manifest.permission.RECORD_AUDIO)
     }
+    // فضل الذكر وتعديله
+    var fadlFor by remember { mutableStateOf<Dhikr?>(null) }
+    var editFor by remember { mutableStateOf<Dhikr?>(null) }
+    fadlFor?.let { d -> FadlDialog(state.adhkar.firstOrNull { it.id == d.id } ?: d, onDismiss = { fadlFor = null }, onEdit = { fadlFor = null; editFor = d }) }
+    editFor?.let { d -> DhikrDialog(state.adhkar.firstOrNull { it.id == d.id } ?: d, state, onDismiss = { editFor = null }) }
+
     enrollFor?.let { d ->
         EnrollDialog(state, d) { saved ->
             enrollFor = null
@@ -228,7 +235,21 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
                     controller = controller,
                     sway = state.sway,
                 )
-                DhikrPanel(state, d, art.style.accent, onAdhkar, Modifier.weight(1f).fillMaxHeight())
+                DhikrPanel(
+                    state, d, art.style.accent,
+                    onAdhkar = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onAdhkar()
+                    },
+                    onFadl = { fadlFor = d },
+                    onHint = {
+                        scope.launch {
+                            snackbar.currentSnackbarData?.dismiss()
+                            snackbar.showSnackbar("اضغط مطولًا لقائمة الأذكار، وانقر نقرتين لفضل الذكر")
+                        }
+                    },
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                )
             }
             // زر النقر الكبير بلون الخرز في الزاوية اليسرى السفلى
             TapButton(
@@ -291,7 +312,10 @@ fun MainScreen(state: AppState, fb: Feedback, onAdhkar: () -> Unit, onBeads: () 
 }
 
 @Composable
-private fun DhikrPanel(state: AppState, d: Dhikr, accent: Color, onAdhkar: () -> Unit, modifier: Modifier) {
+private fun DhikrPanel(
+    state: AppState, d: Dhikr, accent: Color,
+    onAdhkar: () -> Unit, onFadl: () -> Unit, onHint: () -> Unit, modifier: Modifier,
+) {
     val density = LocalDensity.current
     val done = d.target > 0 && d.count >= d.target
     val pop = remember { Animatable(1f) }
@@ -328,13 +352,16 @@ private fun DhikrPanel(state: AppState, d: Dhikr, accent: Color, onAdhkar: () ->
             else -> 23.sp
         }
         Column(
-            Modifier.tipTarget("dhikr").clickable(remember { MutableInteractionSource() }, indication = null, onClick = onAdhkar),
+            // ضغطة مطولة: قائمة الأذكار · نقرتان: فضل الذكر · نقرة: تلميح
+            Modifier.tipTarget("dhikr").combinedClickable(
+                interactionSource = remember { MutableInteractionSource() }, indication = null,
+                onClick = onHint, onDoubleClick = onFadl, onLongClick = onAdhkar,
+            ),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(d.text, color = Cream, fontSize = fs, lineHeight = fs * 1.5f, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                Text("الأذكار", color = Cream.copy(alpha = 0.45f), style = MaterialTheme.typography.titleMedium, letterSpacing = 1.sp)
-                Icon(Icons.Default.KeyboardArrowDown, null, tint = Cream.copy(alpha = 0.45f), modifier = Modifier.size(16.dp))
+                Text("مطوّلًا: الأذكار · نقرتان: الفضل", color = Cream.copy(alpha = 0.4f), style = MaterialTheme.typography.bodyMedium)
             }
         }
         Spacer(Modifier.height(26.dp))

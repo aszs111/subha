@@ -20,6 +20,8 @@ data class Dhikr(
     val bead: String = "olive",
     val today: Int = 0,
     val day: Long = 0,
+    /** فضل الذكر (نص حر)؛ للأذكار الافتراضية يُملأ من الصحيحين. */
+    val fadl: String = "",
 )
 
 /** نتيجة التسبيحة الواحدة. */
@@ -37,7 +39,7 @@ private val DEFAULTS = listOf(
     Seed("اللَّهُمَّ صَلِّ عَلَى نَبِيِّنَا مُحَمَّدٍ", 100, "agate"),
 )
 
-private fun seedList() = DEFAULTS.mapIndexed { i, d -> Dhikr(i + 1L, d.text, d.target, bead = d.bead) }
+private fun seedList() = DEFAULTS.mapIndexed { i, d -> Dhikr(i + 1L, d.text, d.target, bead = d.bead, fadl = Fadl.of(d.text)) }
 
 private fun todayEpoch(): Long = java.time.LocalDate.now().toEpochDay()
 
@@ -82,6 +84,7 @@ class AppState(context: Context) {
                         Dhikr(
                             o.getLong("id"), o.getString("t"), o.optInt("g", 0), o.optInt("c", 0), o.optLong("s", 0),
                             o.optString("b", "olive"), o.optInt("td", 0), o.optLong("dy", 0),
+                            if (o.has("f")) o.getString("f") else Fadl.of(o.getString("t")),
                         )
                     )
                 }
@@ -99,7 +102,7 @@ class AppState(context: Context) {
         val a = JSONArray()
         adhkar.forEach { d ->
             a.put(JSONObject().put("id", d.id).put("t", d.text).put("g", d.target).put("c", d.count).put("s", d.total)
-                .put("b", d.bead).put("td", d.today).put("dy", d.day))
+                .put("b", d.bead).put("td", d.today).put("dy", d.day).put("f", d.fadl))
         }
         prefs.edit().putString("adhkar2", a.toString()).putLong("current", currentId).apply()
     }
@@ -149,15 +152,15 @@ class AppState(context: Context) {
 
     fun select(id: Long) { currentId = id; saveList() }
 
-    fun add(text: String, target: Int) {
+    fun add(text: String, target: Int, fadl: String = "") {
         val id = (adhkar.maxOfOrNull { it.id } ?: 0L) + 1
-        adhkar.add(Dhikr(id, text.trim(), target, bead = current.bead))
+        adhkar.add(Dhikr(id, text.trim(), target, bead = current.bead, fadl = fadl.trim().ifEmpty { Fadl.of(text) }))
         saveList()
     }
 
-    fun update(id: Long, text: String, target: Int) {
+    fun update(id: Long, text: String, target: Int, fadl: String) {
         val d = adhkar.firstOrNull { it.id == id } ?: return
-        replace(d.copy(text = text.trim(), target = target))
+        replace(d.copy(text = text.trim(), target = target, fadl = fadl.trim()))
     }
 
     fun setTarget(target: Int) = replace(current.copy(target = target))

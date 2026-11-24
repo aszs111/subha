@@ -51,7 +51,10 @@ android {
 
 kotlin {
     jvmToolchain(17)
-    compilerOptions { optIn.add("androidx.compose.material3.ExperimentalMaterial3Api") }
+    compilerOptions {
+        optIn.add("androidx.compose.material3.ExperimentalMaterial3Api")
+        optIn.add("androidx.compose.foundation.ExperimentalFoundationApi")
+    }
 }
 
 dependencies {

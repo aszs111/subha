@@ -3,6 +3,8 @@ package com.adel.subha.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.lazy.LazyRow
@@ -105,6 +107,7 @@ private fun TargetChips(target: Int, onPick: (Int) -> Unit) {
 fun AdhkarScreen(state: AppState, onBack: () -> Unit) {
     var editing by remember { mutableStateOf<Dhikr?>(null) }
     var enrolling by remember { mutableStateOf<Dhikr?>(null) }
+    var fadlOf by remember { mutableStateOf<Dhikr?>(null) }
     var adding by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -126,10 +129,16 @@ fun AdhkarScreen(state: AppState, onBack: () -> Unit) {
             items(state.adhkar, key = { it.id }) { d ->
                 val selected = d.id == state.currentId
                 Surface(
-                    onClick = { state.select(d.id); onBack() },
                     shape = RoundedCornerShape(18.dp),
                     color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
                     border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Gold else Gold.copy(alpha = 0.2f)),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(18.dp))
+                        .combinedClickable(
+                            onClick = { state.select(d.id); onBack() },
+                            onDoubleClick = { fadlOf = d },
+                            onLongClick = { editing = d },
+                        ),
                 ) {
                     Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (selected) {
@@ -161,12 +170,14 @@ fun AdhkarScreen(state: AppState, onBack: () -> Unit) {
 
     if (adding) DhikrDialog(null, state, onDismiss = { adding = false })
     enrolling?.let { d -> EnrollDialog(state, d) { enrolling = null } }
+    fadlOf?.let { d -> FadlDialog(d, onDismiss = { fadlOf = null }, onEdit = { fadlOf = null; editing = d }) }
     editing?.let { d -> DhikrDialog(d, state, onDismiss = { editing = null }) }
 }
 
 @Composable
-private fun DhikrDialog(d: Dhikr?, state: AppState, onDismiss: () -> Unit) {
+fun DhikrDialog(d: Dhikr?, state: AppState, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(d?.text ?: "") }
+    var fadl by remember { mutableStateOf(d?.fadl ?: "") }
     var target by remember { mutableStateOf(d?.target ?: 100) }
     var targetText by remember { mutableStateOf(if ((d?.target ?: 100) > 0) (d?.target ?: 100).toString() else "") }
     var confirmDelete by remember { mutableStateOf(false) }
@@ -177,6 +188,13 @@ private fun DhikrDialog(d: Dhikr?, state: AppState, onDismiss: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(text, { text = it }, label = { Text("نص الذكر") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    fadl, { fadl = it },
+                    label = { Text("فضل هذا الذكر (اختياري)") },
+                    placeholder = { Text("مثل: حديث في فضله مع تخريجه") },
+                    minLines = 3, maxLines = 8, modifier = Modifier.fillMaxWidth(),
+                )
                 Spacer(Modifier.height(12.dp))
                 Text("عدد المرات (الخطة)", style = MaterialTheme.typography.titleSmall, color = Gold)
                 Spacer(Modifier.height(6.dp))
@@ -205,7 +223,7 @@ private fun DhikrDialog(d: Dhikr?, state: AppState, onDismiss: () -> Unit) {
         },
         confirmButton = {
             TextButton(enabled = text.isNotBlank(), onClick = {
-                if (d == null) state.add(text, target) else state.update(d.id, text, target)
+                if (d == null) state.add(text, target, fadl) else state.update(d.id, text, target, fadl)
                 onDismiss()
             }) { Text("حفظ") }
         },
@@ -411,4 +429,28 @@ private fun LabeledSlider(title: String, lo: String, hi: String, value: Float, o
         Slider(value = value, onValueChange = onChange, modifier = Modifier.weight(1f).padding(horizontal = 8.dp))
         Text(hi, style = MaterialTheme.typography.bodySmall, color = Cream.copy(alpha = 0.6f))
     }
+}
+
+/** نافذة فضل الذكر (تظهر بالنقر المزدوج على الذكر). */
+@Composable
+fun FadlDialog(d: Dhikr, onDismiss: () -> Unit, onEdit: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("فضل الذكر", color = Gold, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(d.text, style = MaterialTheme.typography.titleLarge, color = Cream, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = Gold.copy(alpha = 0.3f))
+                Spacer(Modifier.height(12.dp))
+                if (d.fadl.isBlank()) {
+                    Text("لم يُكتب فضلٌ لهذا الذكر بعد. يمكنك إضافته من «تعديل».", style = MaterialTheme.typography.bodyLarge, color = Cream.copy(alpha = 0.7f))
+                } else {
+                    Text(d.fadl, style = MaterialTheme.typography.bodyLarge.copy(fontSize = MaterialTheme.typography.bodyLarge.fontSize * 1.12f), color = Cream, lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.25f)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("حسنًا") } },
+        dismissButton = { TextButton(onClick = onEdit) { Text(if (d.fadl.isBlank()) "إضافة فضل" else "تعديل") } },
+    )
 }
