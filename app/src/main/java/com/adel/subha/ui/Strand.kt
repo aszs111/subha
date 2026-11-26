@@ -325,13 +325,13 @@ class Swing {
     @Volatile var target = 0f
     var angle = 0f
     private var vel = 0f
-    fun kick() { vel += (if (Random.nextBoolean()) 1f else -1f) * (5f + Random.nextFloat() * 3f) }
+    fun kick() { vel += (if (Random.nextBoolean()) 1f else -1f) * (2f + Random.nextFloat() * 1.5f) }
     fun step(dt: Float) {
-        val acc = -38f * (angle - target) - 3.2f * vel
+        val acc = -38f * (angle - target) - 7f * vel
         vel += acc * dt
         angle += vel * dt
     }
-    fun settled() = abs(angle - target) < 0.01f && abs(vel) < 0.02f
+    fun settled() = abs(angle - target) < 0.02f && abs(vel) < 0.05f
 }
 
 @Composable
@@ -346,8 +346,11 @@ private fun SwaySensor(enabled: Boolean, swing: Swing) {
             override fun onSensorChanged(e: SensorEvent) {
                 // زاوية «الأسفل» الحقيقي بالنسبة للشاشة، مخففة ومحدودة
                 val deg = Math.toDegrees(atan2(e.values[0].toDouble(), e.values[1].toDouble())).toFloat()
-                smooth += (deg - smooth) * 0.15f
-                swing.target = (smooth * 0.25f).coerceIn(-2.5f, 2.5f)
+                // ترشيح قوي، ومنطقة ميتة ٤ درجات حتى لا يتحرك الخيط مع ارتعاش اليد
+                smooth += (deg - smooth) * 0.04f
+                val dz = if (abs(smooth) < 4f) 0f else smooth - 4f * kotlin.math.sign(smooth)
+                val t = (dz * 0.12f).coerceIn(-1.2f, 1.2f)
+                if (abs(t - swing.target) > 0.08f || t == 0f) swing.target = t
             }
             override fun onAccuracyChanged(s: Sensor?, a: Int) {}
         }
