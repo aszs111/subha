@@ -120,7 +120,11 @@ fun DrawScope.drawStrand(
   // أقصى ميل يُبقي أبعد خرزة كاملة داخل عمود الخرز (لا تدخل في الجانب الأيسر ولا تُقص)
   val margin = (g.cx - g.art.beads[0].width * g.s / 2f - 3.dp.toPx()).coerceAtLeast(0f)
   val maxA = Math.toDegrees(kotlin.math.atan((margin / (size.height * 1.25f)).toDouble())).toFloat()
-  val shown = if (maxA <= 0.01f) 0f else maxA * kotlin.math.tanh(tilt / maxA)
+  // الحركة كما هي تمامًا، ولا تُليَّن إلا في آخر ١٥٪ قبل حافة العمود
+  val knee = 0.85f * maxA
+  val at = abs(tilt)
+  val shown = if (maxA <= 0.01f) 0f else if (at <= knee) tilt
+      else kotlin.math.sign(tilt) * (knee + (maxA - knee) * kotlin.math.tanh((at - knee) / (maxA - knee)))
   withTransform({ rotate(shown, Offset(g.cx, -size.height * 0.25f)) }) {
     rope(g, g.art.style.thread)
 
