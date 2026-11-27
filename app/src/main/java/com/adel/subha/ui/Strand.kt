@@ -227,7 +227,8 @@ fun BeadStrand(
         val g = remember(art, w, h) {
             StrandGeom(art, w, h, beadW, topBase = h * 0.36f, botTop = h * 0.64f, px1 = with(density) { 0.5.dp.toPx() })
         }
-        val releaseT = min(g.unitH(1) * 0.45f, with(density) { 52.dp.toPx() })
+        // الخرزة تتبع الإصبع صعودًا ونزولًا في الفراغ، ولا تُحسب حتى تلامس المجموعة السفلى
+        val gap = (g.botTop - g.topBase).coerceAtLeast(1f)
         val flingV = with(density) { 700.dp.toPx() }
 
         fun pendingAt(m: Int): Float = drops.sumOf { d ->
@@ -244,7 +245,7 @@ fun BeadStrand(
             drag = 0f
             pos = i
             dropCb()
-            val dur = (sqrt(((g.botTop - top) / h).coerceAtLeast(0.01f)) * 520).toInt().coerceIn(140, 420)
+            val dur = (sqrt(((g.botTop - top) / h).coerceAtLeast(0.01f)) * 520).toInt().coerceIn(50, 420)
             scope.launch {
                 try {
                     d.t.animateTo(1f, tween(dur, easing = LinearEasing))
@@ -285,10 +286,11 @@ fun BeadStrand(
                             if (!ch.pressed) {
                                 if (!dragging) tapCb()
                                 else if (!released && drag > 0f) {
-                                    if (vt.calculateVelocity().y > flingV) release()
+                                    // تُفلت قرب الأسفل أو بنفضة: تسقط وتُحسب؛ وإلا ترجع إلى مكانها
+                                    if (vt.calculateVelocity().y > flingV || drag >= gap * 0.6f) release()
                                     else {
                                         val p0 = drag
-                                        scope.launch { animate(p0, 0f, animationSpec = tween(180)) { v, _ -> drag = v } }
+                                        scope.launch { animate(p0, 0f, animationSpec = spring(dampingRatio = 0.55f, stiffness = 500f)) { v, _ -> drag = v } }
                                     }
                                 }
                                 break
@@ -301,8 +303,8 @@ fun BeadStrand(
                                 ch.consume()
                                 if (!released) {
                                     val dy = ch.position.y - lastY
-                                    drag = (drag + dy).coerceAtLeast(0f)
-                                    if (drag >= releaseT) { release(); released = true }
+                                    drag = (drag + dy).coerceIn(0f, gap)
+                                    if (drag >= gap - 1f) { release(); released = true }
                                 }
                                 lastY = ch.position.y
                             }
