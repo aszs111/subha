@@ -117,7 +117,11 @@ fun DrawScope.drawStrand(
     jolt: Float = 0f, tilt: Float = 0f,
 ) {
   // الخيط معلّق من نقطة فوق الشاشة، فيميل كله حولها
-  withTransform({ rotate(tilt, Offset(g.cx, -size.height * 0.25f)) }) {
+  // أقصى ميل يُبقي أبعد خرزة كاملة داخل عمود الخرز (لا تدخل في الجانب الأيسر ولا تُقص)
+  val margin = (g.cx - g.art.beads[0].width * g.s / 2f - 3.dp.toPx()).coerceAtLeast(0f)
+  val maxA = Math.toDegrees(kotlin.math.atan((margin / (size.height * 1.25f)).toDouble())).toFloat()
+  val shown = if (maxA <= 0.01f) 0f else maxA * kotlin.math.tanh(tilt / maxA)
+  withTransform({ rotate(shown, Offset(g.cx, -size.height * 0.25f)) }) {
     rope(g, g.art.style.thread)
 
     // السفلى
@@ -215,7 +219,7 @@ fun BeadStrand(
     BoxWithConstraints(modifier.semantics { contentDescription = "الخرزات" }) {
         val w = constraints.maxWidth.toFloat()
         val h = constraints.maxHeight.toFloat()
-        val beadW = min(w * 0.62f, with(density) { 118.dp.toPx() })
+        val beadW = min(w * 0.56f, with(density) { 112.dp.toPx() })
         val g = remember(art, w, h) {
             StrandGeom(art, w, h, beadW, topBase = h * 0.36f, botTop = h * 0.64f, px1 = with(density) { 0.5.dp.toPx() })
         }
